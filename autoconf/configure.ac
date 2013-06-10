@@ -103,6 +103,11 @@ if test -d ${srcdir}/projects/llvm-poolalloc ; then
   AC_CONFIG_SUBDIRS([projects/llvm-poolalloc])
 fi
 
+if test -d ${srcdir}/projects/llvm-deps ; then
+  AC_CONFIG_SUBDIRS([projects/llvm-deps])
+fi
+
+
 dnl Check for all other projects
 for i in `ls ${srcdir}/projects`
 do
@@ -685,9 +690,9 @@ AC_ARG_ENABLE(backtraces,
                  [Enable embedding backtraces on crash (default is YES)]),,
                  enableval=default)
 case "$enableval" in
-  yes) AC_SUBST(ENABLE_TIMESTAMPS,[1]) ;;
-  no)  AC_SUBST(ENABLE_TIMESTAMPS,[0]) ;;
-  default) AC_SUBST(ENABLE_TIMESTAMPS,[1]) ;;
+  yes) AC_SUBST(ENABLE_BACKTRACES,[1]) ;;
+  no)  AC_SUBST(ENABLE_BACKTRACES,[0]) ;;
+  default) AC_SUBST(ENABLE_BACKTRACES,[1]) ;;
   *) AC_MSG_ERROR([Invalid setting for --enable-backtraces. Use "yes" or "no"]) ;;
 esac
 AC_DEFINE_UNQUOTED([ENABLE_BACKTRACES],$ENABLE_BACKTRACES,
