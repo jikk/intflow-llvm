@@ -89,7 +89,7 @@ Infoflow::bottomOutput() const {
 
 const Unit
 Infoflow::runOnContext(const Infoflow::AUnitType unit, const Unit input) {
-  DEBUG(errs() << "Running on " << unit.function().getName() << " in context [";
+  DEBUG(errs() << "DEPS: Running on " << unit.function().getName() << " in context [";
   CM.getContextFor(unit.context()).dump();
   errs() << "]\n");
   generateFunctionConstraints(unit.function());
