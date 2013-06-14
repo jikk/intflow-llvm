@@ -36,7 +36,7 @@ char SourceSinkAnalysis::ID;
 
 bool SourceSinkAnalysis::runOnModule(Module &M) {
   for (Module::iterator fun = M.begin(), fend = M.end(); fun != fend; ++fun) {
-DEBUG(errs() << "Adding sources and sinks from " << fun->getName() << "\n");
+    DEBUG(errs() << "[SrcSinkAnal] Adding sources and sinks from " << fun->getName() << "\n");
 
     std::set<const Value *> sources;
     std::set<const Value *> sinks;

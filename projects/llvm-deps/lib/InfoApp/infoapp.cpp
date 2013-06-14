@@ -17,7 +17,9 @@ InfoAppPass::doInitialization() {
 }
 
 void
-InfoAppPass::doFinalization() {}
+InfoAppPass::doFinalization() {
+  DEBUG(errs() << "[InfoApp] doFinalization\n");
+}
 
 bool
 InfoAppPass::runOnModule(Module &M) {
