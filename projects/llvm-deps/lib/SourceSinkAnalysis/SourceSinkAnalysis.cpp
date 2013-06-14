@@ -15,6 +15,7 @@
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
@@ -35,7 +36,7 @@ char SourceSinkAnalysis::ID;
 
 bool SourceSinkAnalysis::runOnModule(Module &M) {
   for (Module::iterator fun = M.begin(), fend = M.end(); fun != fend; ++fun) {
-    //errs() << "Adding sources and sinks from " << fun->getName() << "\n";
+DEBUG(errs() << "Adding sources and sinks from " << fun->getName() << "\n");
 
     std::set<const Value *> sources;
     std::set<const Value *> sinks;
@@ -103,21 +104,21 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
     }
     
     // Use the source and sink sets to generate constraints
-    //errs() << "sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] sources:\n");
     for (std::set<const Value *>::iterator value = sources.begin(), end = sources.end();
 	  value != end; ++value) {
         sourcesAndSinks.addSourceValue(**value);
         //infoflow->setTainted("source", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "direct sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] direct sources:\n");
     for (std::set<const Value *>::iterator value = directPtrSources.begin(), end = directPtrSources.end();
 	  value != end; ++value) {
         sourcesAndSinks.addSourceDirectPtr(**value);
         //infoflow->setDirectPtrTainted("source", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "reachable sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] reachable sources:\n");
     for (std::set<const Value *>::iterator value = reachPtrSources.begin(), end = reachPtrSources.end();
           value != end; ++value) {
         sourcesAndSinks.addSourceReachablePtr(**value);
@@ -125,28 +126,28 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
         //errs() << "\t" << **value << "\n";
     }
 
-    //errs() << "sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] sinks:\n");
     for (std::set<const Value *>::iterator value = sinks.begin(), end = sinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkValue(**value);
         //infoflow->setUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "direct sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] direct sinks:\n");
     for (std::set<const Value *>::iterator value = directPtrSinks.begin(), end = directPtrSinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkDirectPtr(**value);
         //infoflow->setDirectPtrUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "reachable sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] reachable sinks:\n");
     for (std::set<const Value *>::iterator value = reachPtrSinks.begin(), end = reachPtrSinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkReachablePtr(**value);
         //infoflow->setReachPtrUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "\n";
+    DEBUG(errs() << "\n");
   }
 
   return false;

@@ -13,7 +13,7 @@ using namespace llvm;
 void
 InfoAppPass::doInitialization() {
   infoflow = &getAnalysis<Infoflow>();
-  DEBUG(errs() << "doInitialization: InfoAppPass\n");
+  DEBUG(errs() << "[InfoApp] doInitialization\n");
 }
 
 void
