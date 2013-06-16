@@ -117,7 +117,16 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
     sprintf(srcstr, "%lld", (signed long long)src);
   else
     sprintf(srcstr, "%llu", (unsigned long long)src);
-  fprintf(stderr, "%s:%d:%d: runtime error: value lost in conversion of '%s'"
+
+  FILE *outfile = fopen("/home/tm/phase2/compiler-rt.log", "a" );
+
+  fprintf(outfile, "%s:%d:%d: runtime error: value lost in conversion of '%s'"
+                  " from '%s' (%s) to '%s' (%s)\n",
+                  filename, line, column, srcstr,
+                  srcty, canonsrcty, dstty, canondstty);
+  fclose(outfile);
+
+  fprintf(stderr, "%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
                   " from '%s' (%s) to '%s' (%s)\n",
                   filename, line, column, srcstr,
                   srcty, canonsrcty, dstty, canondstty);
@@ -146,7 +155,16 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   __ioc_print_val(lstr, lval, LT);
   __ioc_print_val(rstr, rval, RT);
 
-  fprintf(stderr, "%s:%d:%d: runtime error: %s "
+  FILE *outfile = fopen("/home/tm/phase2/compiler-rt.log", "a" );
+
+  fprintf(outfile, "%s:%d:%d: runtime error: %s "
+                  "[ expr = '%s', lval = %s, rval = %s ]\n",
+                  filename, line, column, msg,
+                  exprstr, lstr, rstr);
+
+  fclose(outfile);
+ 
+  fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
                   "[ expr = '%s', lval = %s, rval = %s ]\n",
                   filename, line, column, msg,
                   exprstr, lstr, rstr);
