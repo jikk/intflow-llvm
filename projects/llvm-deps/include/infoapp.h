@@ -13,6 +13,16 @@ namespace deps {
 
 using namespace llvm;
 
+std::string wLst[] = {
+  "gettimeofday"
+};
+
+std::string bLst[] = {
+  "read",
+  "recv"
+};
+
+  
 class InfoAppPass : public ModulePass {  
   public:
   InfoAppPass() : ModulePass(ID) {}
@@ -33,10 +43,17 @@ class InfoAppPass : public ModulePass {
     virtual void doInitialization();
     virtual void doFinalization();
   
-    bool TrackSoln(Module &M, InfoflowSolution* soln);
-    bool checkTainted(Value &V, InfoflowSolution* soln);
+    /// Traverse instructions from the module(M) and identify tainted
+    /// instructions
+    bool trackSoln(Module &M,
+                   InfoflowSolution* soln,
+                   CallInst* sinkCI,
+                   std::string& kinds);
+
+    bool checkBackwardTainted(Value &V, InfoflowSolution* soln);
+    bool checkForwardTainted(Value &V, InfoflowSolution* soln);
   
-};  // class
+};  //class
 
 /* ID for InfoAppPass */
 char InfoAppPass::ID = 99;
