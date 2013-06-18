@@ -3,8 +3,11 @@
 
 #include "llvm/Pass.h"
 #include "llvm/Module.h"
+#include "llvm/ADT/StringRef.h"
 
 #include "Infoflow.h"
+
+#include <set>
 
 namespace deps {
 
@@ -15,7 +18,7 @@ class InfoAppPass : public ModulePass {
   InfoAppPass() : ModulePass(ID) {}
   static char ID;
   bool runOnModule(Module &M);
-
+  
   virtual void getAnalysisUsage(AnalysisUsage &AU) const {
     AU.addRequired<Infoflow>();
     AU.setPreservesAll();
@@ -23,8 +26,16 @@ class InfoAppPass : public ModulePass {
 
   private:
     Infoflow* infoflow;
+    DenseMap<const Value*, bool> xformMap;
+    std::set<StringRef> whiteSet;
+    std::set<StringRef> blackSet;
+
     virtual void doInitialization();
     virtual void doFinalization();
+  
+    bool TrackSoln(Module &M, InfoflowSolution* soln);
+    bool checkTainted(Value &V, InfoflowSolution* soln);
+  
 };  // class
 
 /* ID for InfoAppPass */

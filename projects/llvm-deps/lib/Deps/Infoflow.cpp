@@ -46,8 +46,9 @@ static RegisterPass<PDTCache>
 Y ("pdtcache", "Cache PostDom Analysis Results", true, true);
   
 Infoflow::Infoflow () : 
-    CallSensitiveAnalysisPass<Unit,Unit,1,CallerContext>(ID, DepsCollapseExtContext, DepsCollapseIndContext),
-    kit(new LHConstraintKit()) { }
+    CallSensitiveAnalysisPass<Unit,Unit,1,CallerContext>
+       (ID, DepsCollapseExtContext, DepsCollapseIndContext),
+       kit(new LHConstraintKit()) { }
 
 void
 Infoflow::doInitialization() {
@@ -249,8 +250,10 @@ InfoflowSolution::isTainted(const Value & value) {
 bool
 InfoflowSolution::isDirectPtrTainted(const Value & value) {
   const std::set<const AbstractLoc *> & locs = infoflow.locsForValue(value);
-  for (std::set<const AbstractLoc *>::const_iterator loc = locs.begin(), end = locs.end();
-        loc != end; ++loc) {
+  for (std::set<const AbstractLoc *>::const_iterator loc = locs.begin(),
+        end = locs.end();
+        loc != end;
+        ++loc) {
     DenseMap<const AbstractLoc *, const ConsElem *>::iterator entry = locMap.find(*loc);
     if (entry != locMap.end()) {
       const ConsElem & elem = *(entry->second);
@@ -258,6 +261,8 @@ InfoflowSolution::isDirectPtrTainted(const Value & value) {
         return true;
       }
     } else {
+      //errs() << "\nERROR!!!";
+      //value.dump();
       assert(false && "abstract location not in solution!");
       return defaultTainted;
     }
@@ -268,8 +273,10 @@ InfoflowSolution::isDirectPtrTainted(const Value & value) {
 bool
 InfoflowSolution::isReachPtrTainted(const Value & value) {
   const std::set<const AbstractLoc *> & locs = infoflow.reachableLocsForValue(value);
-  for (std::set<const AbstractLoc *>::iterator loc = locs.begin(), end = locs.end();
-        loc != end; ++loc) {
+  for (std::set<const AbstractLoc *>::iterator loc = locs.begin(), 
+         end = locs.end();
+         loc != end;
+         ++loc) {
     DenseMap<const AbstractLoc *, const ConsElem *>::iterator entry = locMap.find(*loc);
     if (entry != locMap.end()) {
       const ConsElem & elem = *(entry->second);

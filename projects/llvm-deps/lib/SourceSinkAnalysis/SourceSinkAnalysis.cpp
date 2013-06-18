@@ -362,7 +362,7 @@ findEntryForFunction(const CallTaintEntry *Summaries,
                      const string &FuncName) {
   unsigned Index;
 
-  if (StringRef(FuncName).startswith("____jf_check"))
+  if (StringRef(FuncName).startswith("__ioc"))
     return &nothing;
 
   for (Index = 0; Summaries[Index].Name; ++Index) {
