@@ -161,7 +161,9 @@ InfoAppPass::trackSoln(Module &M,
                         InfoflowSolution* soln,
                         CallInst* sinkCI,
                         std::string& kind)
-  {
+{
+  bool ret = false;
+    
   //need optimization or parallelization
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
@@ -180,28 +182,53 @@ InfoAppPass::trackSoln(Module &M,
                 whiteSet.find(func->getName());
             if (whiteSet.end() != wi) {
               
-              //trace back to confirm info-flow
-              //explicit-flow and cutAfterSinks
+              //trace back to confirm infoflow
               std::set<std::string> kinds;
-              kinds.insert("src-" + kind);
-      
+              std::string srcKind = "src" + kind;
+              kinds.insert(srcKind);
+
+              infoflow->setTainted(srcKind, *ci);
+#ifdef __DIRECT__
+              infoflow->setDirectPtrTainted(srcKind, *ci);
+#endif
+#ifdef __REACH__
+              infoflow->setReachPtrTainted(srcKind, *ci);
+#endif
+              //explicit-flow and cutAfterSinks
               InfoflowSolution* fsoln =
-                infoflow->leastSolution(kinds, false, true);
-             
-              return checkForwardTainted(*sinkCI, fsoln);
+                infoflow->leastSolution(kinds, false, true);             
+              ret = ret && checkForwardTainted(*sinkCI, fsoln);
+              // ret = ret && true;
             }
             
             std::set<StringRef>::const_iterator bi =
                 blackSet.find(func->getName());
             if (blackSet.end() != bi) {
-              return false;
+              //trace back to confirm infoflow
+              std::set<std::string> kinds;
+              std::string srcKind = "src" + kind;
+              kinds.insert(srcKind);
+              
+              infoflow->setTainted(srcKind, *ci);
+#ifdef __DIRECT__
+              infoflow->setDirectPtrTainted(srcKind, *ci);
+#endif
+#ifdef __REACH__
+              infoflow->setReachPtrTainted(srcKind, *ci);
+#endif
+              
+              //explicit-flow and cutAfterSinks
+              InfoflowSolution* fsoln =
+                infoflow->leastSolution(kinds, false, true);
+              ret = ret && !checkForwardTainted(*sinkCI, fsoln);
+              // ret = ret && false;
             }
           }
         }
       }
     }
   }
-  return false;
+  return ret;
 }
 
 bool

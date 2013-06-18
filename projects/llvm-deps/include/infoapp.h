@@ -44,7 +44,10 @@ class InfoAppPass : public ModulePass {
     virtual void doFinalization();
   
     /// Traverse instructions from the module(M) and identify tainted
-    /// instructions
+    /// instructions.
+    /// if it returns true: tag it to replace it with dummy
+    ///       returns false: do not change
+  
     bool trackSoln(Module &M,
                    InfoflowSolution* soln,
                    CallInst* sinkCI,
