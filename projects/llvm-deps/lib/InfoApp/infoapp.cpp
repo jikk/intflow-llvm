@@ -10,7 +10,7 @@
 
 #include "Infoapp.h"
 
-//#define __DIRECT__
+#define __DIRECT__
 //#define __REACH__
 
 using std::set;
@@ -47,9 +47,8 @@ InfoAppPass::doFinalization() {
   
   for (;xi!=xe; xi++) {
     //changed ones
-    if (xi->second) {
-      xi->first->dump();
-    }
+    DEBUG(errs() << "[InfoApp]xformMap:" << xi->second << ":");
+    DEBUG(xi->first->dump());
   }
 }
 
@@ -109,25 +108,13 @@ InfoAppPass::runOnModule(Module &M) {
             
             Value* lval = ci->getOperand(4);
             Value* rval = ci->getOperand(5);
-            
-            infoflow->setUntainted(sinkKind, *lval);
-                        
+
             //tagging lVal
-#ifdef __DIRECT__
-            infoflow->setDirectPtrUntainted(sinkKind, *lval);
-#endif
-#ifdef __REACH__
-            infoflow->setReachPtrUntainted(sinkKind, *lval);
-#endif
+            infoflow->setUntainted(sinkKind, *lval);
             
             //tagging rVal
             infoflow->setUntainted(sinkKind, *rval);
-#ifdef __DIRECT__
-            infoflow->setDirectPtrUntainted(sinkKind, *rval);
-#endif
-#ifdef __REACH__
-            infoflow->setReachPtrUntainted(sinkKind, *rval);
-#endif
+
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
             xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
@@ -146,12 +133,7 @@ InfoAppPass::runOnModule(Module &M) {
 
             //tagging unary arg
             infoflow->setUntainted(sinkKind, *val);
-#ifdef __DIRECT__
-            infoflow->setDirectPtrUntainted(sinkKind, *val);
-#endif
-#ifdef __REACH__
-            infoflow->setReachPtrUntainted(sinkKind, *val);
-#endif
+
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
             xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
@@ -160,7 +142,6 @@ InfoAppPass::runOnModule(Module &M) {
       }
     }
   }
-
   doFinalization();
   return false;
 }
@@ -171,7 +152,6 @@ InfoAppPass::trackSoln(Module &M,
                         CallInst* sinkCI,
                         std::string& kind)
 {
-  
   DEBUG(errs() << "[InfoApp]trackSoln:" << "\n");
   //by default do not change/replace.
   bool ret = false;
@@ -197,38 +177,54 @@ InfoAppPass::trackSoln(Module &M,
             std::set<StringRef>::const_iterator wi =
                 whiteSet.find(func->getName());
             if (whiteSet.end() != wi) {
+              DEBUG(errs() << "[InfoApp]white-list:" << func->getName() <<"\n");
               
               std::set<std::string> kinds;
               std::string srcKind = "src0" + kind;
               kinds.insert(srcKind);
+              
+              //TODO: need per white-list entry setting required
 
               infoflow->setTainted(srcKind, *ci);
-#ifdef __DIRECT__
-              infoflow->setDirectPtrTainted(srcKind, *ci);
-#endif
+              infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(0)));
 #ifdef __REACH__
-              infoflow->setReachPtrTainted(srcKind, *ci);
+              infoflow->setReachPtrTainted(srcKind, ci->getOperand(0));
 #endif
-              //trace back to confirm infoflow with forward slicing
-              //explicit-flow and cutAfterSinks
+              //trace-back to confirm infoflow with forward slicing
+              //explicit-flow and cutAfterSinks.
               InfoflowSolution* fsoln =
-                infoflow->leastSolution(kinds, false, true);             
-              ret = checkForwardTainted(*sinkCI, fsoln);
-              // ret = true;
+                infoflow->leastSolution(kinds, false, true);
+              
+              
+              Function* sinkFunc = sinkCI->getCalledFunction();
+              if(sinkFunc->getName() == "__ioc_report_conversion") {
+                ret = checkForwardTainted(*(sinkCI->getOperand(7)), fsoln);
+
+              } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_sub_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+              {
+                ret = (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
+                       checkForwardTainted(*(sinkCI->getOperand(5)), fsoln));
+
+              } else {
+                assert(false && "not __ioc_report function");
+              }
             }
             
             //check for blacklist
             std::set<StringRef>::const_iterator bi =
                 blackSet.find(func->getName());
             if (blackSet.end() != bi) {
+              DEBUG(errs() << "[InfoApp]black-list:" << func->getName() <<"\n");
               std::set<std::string> kinds;
               std::string srcKind = "src1" + kind;
               kinds.insert(srcKind);
               
+              //TODO: need per black-list entry setting required
+  
               infoflow->setTainted(srcKind, *ci);
-#ifdef __DIRECT__
-              infoflow->setDirectPtrTainted(srcKind, *ci);
-#endif
+              infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(0)));
 #ifdef __REACH__
               infoflow->setReachPtrTainted(srcKind, *ci);
 #endif
@@ -238,9 +234,25 @@ InfoAppPass::trackSoln(Module &M,
               InfoflowSolution* fsoln =
                 infoflow->leastSolution(kinds, false, true);
               
-              //tainted source detected! just get out
-              if (!checkForwardTainted(*sinkCI, fsoln))
-                return false;
+              
+              Function* sinkFunc = sinkCI->getCalledFunction();
+              if(sinkFunc->getName() == "__ioc_report_conversion") {
+                if (checkForwardTainted(*(sinkCI->getOperand(7)), fsoln)) {
+                  //tainted source detected! just get out
+                  return false;
+                }
+              } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_sub_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
+                    checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
+                {
+                  //tainted source detected! just get out
+                  return false;
+                }
+              } else {
+                assert(false && "not __ioc_report function");
+              }
             }
           } else if (isConstAssign(*ii)) {
             ret = true;
@@ -248,7 +260,6 @@ InfoAppPass::trackSoln(Module &M,
         }
       }
     }
-  }
   return ret;
 }
 
@@ -266,7 +277,6 @@ InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln) {
 
   return ret;
 }
-  
   
 bool
 InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln) {

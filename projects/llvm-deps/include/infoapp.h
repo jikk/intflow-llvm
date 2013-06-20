@@ -18,6 +18,7 @@ std::string wLst[] = {
 };
 
 std::string bLst[] = {
+  "fgets",
   "read",
   "recv"
 };
