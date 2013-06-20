@@ -136,20 +136,11 @@ InfoAppPass::runOnModule(Module &M) {
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
             
-            //check for const. conversion
-
+            //check for simple const. assignment
+            //getting valeMap
             std::set<const Value *> vMap;
             soln->getValueMap(vMap);
-            
-            std::set<const Value *>::const_iterator vi = vMap.begin();
-            std::set<const Value *>::const_iterator ve = vMap.end();
-            
-            for (;vi != ve; vi++) {
-              const Value* val = *vi;
-              val->dump();
-            }
 
-            //check for simple const. assign case
             if(isConstAssign(vMap))
             {
               //replace it for simple const. assignment
@@ -319,7 +310,7 @@ bool
 InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator vi = vMap.begin();
   std::set<const Value *>::const_iterator ve = vMap.end();
-  
+
   for (;vi!=ve; vi++) {
     Value* val = (Value*) *vi;
     if (CallInst* ci = dyn_cast<CallInst>(val)) {
