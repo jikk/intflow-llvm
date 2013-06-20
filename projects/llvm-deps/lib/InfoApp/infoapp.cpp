@@ -18,24 +18,41 @@ namespace deps {
 
 using namespace llvm;
 
+static const struct CallTaintEntry bLstSourceSummaries[] = {
+  // function  tainted values   tainted direct memory tainted root ptrs
+  { "fgets",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
+  { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+};
+
+static const struct CallTaintEntry wLstSourceSummaries[] = {
+  // function  tainted values   tainted direct memory tainted root ptrs
+  { "gettimeofday",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
+  { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+};
+  
+CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
+  
+//XXX: same function from SourceSinkAnalysis
+static const CallTaintEntry *
+findEntryForFunction(const CallTaintEntry *Summaries,
+                     const std::string &FuncName) {
+  unsigned Index;
+  
+  if (StringRef(FuncName).startswith("__ioc"))
+    return &nothing;
+  
+  for (Index = 0; Summaries[Index].Name; ++Index) {
+    if (Summaries[Index].Name == FuncName)
+      return &Summaries[Index];
+  }
+  // Return the default summary.
+  return &Summaries[Index];
+}
+  
 void
 InfoAppPass::doInitialization() {
   infoflow = &getAnalysis<Infoflow>();
   DEBUG(errs() << "[InfoApp] doInitialization\n");
-  
-  //init. whitelist(whiteSet)
-  for (unsigned int i=0;
-       i < (sizeof(wLst) / sizeof(wLst[0]));
-       i++) {
-    whiteSet.insert(wLst[i]);
-  }
-  
-  //init. blacklist(blackSet)
-  for (unsigned int i=0;
-       i < (sizeof(bLst) / sizeof(bLst[0]));
-       i++) {
-    blackSet.insert(bLst[i]);
-  }
 }
 
 void
@@ -46,8 +63,8 @@ InfoAppPass::doFinalization() {
   
   for (;xi!=xe; xi++) {
     //changed ones
-    DEBUG(errs() << "[InfoApp]xformMap:" << xi->second << ":");
-    DEBUG(xi->first->dump());
+    errs() << "[InfoApp]xformMap:" << xi->second << ":";
+    xi->first->dump();
   }
 }
 
@@ -156,7 +173,8 @@ InfoAppPass::runOnModule(Module &M) {
   doFinalization();
   return false;
 }
-  
+
+//XXX: now it is too messy. the function need some clean-up  
 bool
 InfoAppPass::trackSoln(Module &M,
                         InfoflowSolution* soln,
@@ -183,28 +201,67 @@ InfoAppPass::trackSoln(Module &M,
 
             if (!func) continue;
             
-            //check for whitelist
-            std::set<StringRef>::const_iterator wi =
-                whiteSet.find(func->getName());
-            if (whiteSet.end() != wi) {
+            //check for white-listing
+            const CallTaintEntry *entry =
+              findEntryForFunction(wLstSourceSummaries, func->getName());
+
+            if (entry->Name) {
               DEBUG(errs() << "[InfoApp]white-list:" << func->getName() <<"\n");
-              
               std::set<std::string> kinds;
               std::string srcKind = "src0" + kind;
               kinds.insert(srcKind);
               
               //TODO: need per white-list entry setting required
+              const CallTaintSummary* vSum = &(entry->ValueSummary);
+              const CallTaintSummary* dSum = &(entry->DirectPointerSummary);
+              const CallTaintSummary* rSum = &(entry->RootPointerSummary);
+              
+              //vSum
+              if (vSum->TaintsReturnValue) {
+                infoflow->setTainted(srcKind, *ci);
+              }
 
-              infoflow->setTainted(srcKind, *ci);
-              infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(0)));
-#ifdef __REACH__
-              infoflow->setReachPtrTainted(srcKind, ci->getOperand(0));
-#endif
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < vSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (vSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+              
+              //dSum
+              if (dSum->TaintsReturnValue) {
+                infoflow->setDirectPtrTainted(srcKind, *ci);
+              }
+              
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < dSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (vSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+
+              //rSum
+              if (rSum->TaintsReturnValue) {
+                infoflow->setReachPtrTainted(srcKind, *ci);
+              }
+              
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < rSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (rSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setReachPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+            
               //trace-back to confirm infoflow with forward slicing
               //explicit-flow and cutAfterSinks.
               InfoflowSolution* fsoln =
-                infoflow->leastSolution(kinds, false, true);
-              
+                infoflow->leastSolution(kinds, false, true);              
               
               Function* sinkFunc = sinkCI->getCalledFunction();
               if(sinkFunc->getName() == "__ioc_report_conversion") {
@@ -221,29 +278,68 @@ InfoAppPass::trackSoln(Module &M,
                 assert(false && "not __ioc_report function");
               }
             }
+
+            //check for black-listing
+            entry =
+              findEntryForFunction(bLstSourceSummaries, func->getName());
             
-            //check for blacklist
-            std::set<StringRef>::const_iterator bi =
-                blackSet.find(func->getName());
-            if (blackSet.end() != bi) {
+            if (entry->Name) {
               DEBUG(errs() << "[InfoApp]black-list:" << func->getName() <<"\n");
               std::set<std::string> kinds;
               std::string srcKind = "src1" + kind;
               kinds.insert(srcKind);
               
-              //TODO: need per black-list entry setting required
-  
-              infoflow->setTainted(srcKind, *ci);
-              infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(0)));
-#ifdef __REACH__
-              infoflow->setReachPtrTainted(srcKind, *ci);
-#endif
-
-              //trace back to confirm infoflow with forward slicing
-              //explicit-flow and cutAfterSinks
-              InfoflowSolution* fsoln =
-                infoflow->leastSolution(kinds, false, true);
+              //TODO: need per white-list entry setting required
+              const CallTaintSummary* vSum = &(entry->ValueSummary);
+              const CallTaintSummary* dSum = &(entry->DirectPointerSummary);
+              const CallTaintSummary* rSum = &(entry->RootPointerSummary);
               
+              //vSum
+              if (vSum->TaintsReturnValue) {
+                infoflow->setTainted(srcKind, *ci);
+              }
+              
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < vSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (vSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+              
+              //dSum
+              if (dSum->TaintsReturnValue) {
+                infoflow->setDirectPtrTainted(srcKind, *ci);
+              }
+              
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < dSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (vSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+              
+              //rSum
+              if (rSum->TaintsReturnValue) {
+                infoflow->setReachPtrTainted(srcKind, *ci);
+              }
+              
+              for (unsigned ArgIndex = 0;
+                   ArgIndex < rSum->NumArguments;
+                   ++ArgIndex) {
+                
+                if (rSum->TaintsArgument[ArgIndex]) {
+                  infoflow->setReachPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
+                }
+              }
+              
+              //trace-back to confirm infoflow with forward slicing
+              //explicit-flow and cutAfterSinks.
+              InfoflowSolution* fsoln =
+              infoflow->leastSolution(kinds, false, true);
               
               Function* sinkFunc = sinkCI->getCalledFunction();
               if(sinkFunc->getName() == "__ioc_report_conversion") {
@@ -253,15 +349,13 @@ InfoAppPass::trackSoln(Module &M,
                 }
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow") {
-                
+                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+              {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
                 {
-                  //tainted source detected! just get out
                   return false;
                 }
-              
               } else {
                 assert(false && "not __ioc_report function");
               }

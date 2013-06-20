@@ -13,17 +13,6 @@ namespace deps {
 
 using namespace llvm;
 
-std::string wLst[] = {
-  "gettimeofday"
-};
-
-std::string bLst[] = {
-  "fgets",
-  "read",
-  "recv"
-};
-
-  
 class InfoAppPass : public ModulePass {  
   public:
   InfoAppPass() : ModulePass(ID) {}
