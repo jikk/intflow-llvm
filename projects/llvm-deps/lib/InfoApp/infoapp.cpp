@@ -1,5 +1,6 @@
 #include <sstream>
 
+#include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
 #include "llvm/Function.h"
 #include "llvm/Module.h"
@@ -9,8 +10,6 @@
 #include "Slice.h"
 
 #include "Infoapp.h"
-
-#define __DIRECT__
 //#define __REACH__
 
 using std::set;
@@ -136,7 +135,28 @@ InfoAppPass::runOnModule(Module &M) {
 
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
-            xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+            
+            //check for const. conversion
+
+            std::set<const Value *> vMap;
+            soln->getValueMap(vMap);
+            
+            std::set<const Value *>::const_iterator vi = vMap.begin();
+            std::set<const Value *>::const_iterator ve = vMap.end();
+            
+            for (;vi != ve; vi++) {
+              const Value* val = *vi;
+              val->dump();
+            }
+
+            //check for simple const. assign case
+            if(isConstAssign(vMap))
+            {
+              //replace it for simple const. assignment
+              xformMap[ci] = true;
+            } else {
+              xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+            }
           }
         }
       }
@@ -168,7 +188,6 @@ InfoAppPass::trackSoln(Module &M,
           DEBUG(ii->dump());
           
           if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-            //check for whitelisting / blacklisting
             Function* func = ci->getCalledFunction();
 
             if (!func) continue;
@@ -243,54 +262,80 @@ InfoAppPass::trackSoln(Module &M,
                 }
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                         sinkFunc->getName() == "__ioc_report_mul_overflow") {
+                
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
                 {
                   //tainted source detected! just get out
                   return false;
                 }
+              
               } else {
                 assert(false && "not __ioc_report function");
               }
             }
-          } else if (isConstAssign(*ii)) {
-            ret = true;
           }
         }
       }
     }
+  }
   return ret;
 }
 
 bool
-InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln) {
+InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
+{
   bool ret = (!soln->isTainted(V));
   
-#ifdef __DIRECT__
-  ret = ret || (!soln->isDirectPtrTainted(V));
-#endif
+  if (direct) {
+    ret = ret || (!soln->isDirectPtrTainted(V));
 #ifdef __REACH__
-  // XXX: not sure about Reachable pointer sets.
-  ret = || (!soln->isReachPtrTainted(V));
+    // XXX: not sure about Reachable pointer sets.
+    ret = || (!soln->isReachPtrTainted(V));
 #endif
+  }
 
   return ret;
 }
   
 bool
-InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln) {
+InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
+{
   bool ret = (soln->isTainted(V));
-    
-#ifdef __DIRECT__
-  ret = ret || (soln->isDirectPtrTainted(V));
-#endif
+
+  if (direct) {
+    ret = ret || (soln->isDirectPtrTainted(V));
 #ifdef __REACH__
-  // XXX: not sure about Reachable pointer sets.
-  ret = || (soln->isReachPtrTainted(V));
+    // XXX: not sure about Reachable pointer sets.
+    ret = || (soln->isReachPtrTainted(V));
 #endif
-    
+  }
+  
   return ret;
 }
+
+bool
+InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
+  std::set<const Value *>::const_iterator vi = vMap.begin();
+  std::set<const Value *>::const_iterator ve = vMap.end();
   
+  for (;vi!=ve; vi++) {
+    Value* val = (Value*) *vi;
+    if (CallInst* ci = dyn_cast<CallInst>(val)) {
+      Function* func = ci->getCalledFunction();
+      if (func->getName().startswith("llvm.ssub.with.overflow")) {
+        continue;
+      } else {
+        //XXX: need more for other function calls
+      }
+    } else if (dyn_cast<LoadInst>(val)) {
+      return false;
+    } else {
+        //XXX: need more for other instructions
+    }
+  }
+  return true;
+}
+
 }  //namespace deps

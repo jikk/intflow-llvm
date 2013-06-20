@@ -54,13 +54,10 @@ class InfoAppPass : public ModulePass {
                    CallInst* sinkCI,
                    std::string& kinds);
 
-    bool checkBackwardTainted(Value &V, InfoflowSolution* soln);
-    bool checkForwardTainted(Value &V, InfoflowSolution* soln);
-  
-    bool isConstAssign(Instruction& inst) {
-    //XXX: implement it!
-      return false;
-    }
+    bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
+    bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
+    bool isConstAssign(const std::set<const Value *> vMap);
+
   
 };  //class
 
