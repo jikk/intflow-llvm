@@ -242,7 +242,7 @@ InfoflowSolution::isTainted(const Value & value) {
     const ConsElem & elem = *(entry->second);
     return (soln->subst(elem) == highConstant);
   } else {
-    DEBUG(errs() << "not in solution: " << value << "\n");
+    DEBUG(errs() << "[infoflow]not in solution: " << value << "\n");
     return defaultTainted;
   }
 }
@@ -261,9 +261,9 @@ InfoflowSolution::isDirectPtrTainted(const Value & value) {
         return true;
       }
     } else {
-      //errs() << "\nERROR!!!";
-      //value.dump();
-      assert(false && "abstract location not in solution!");
+      DEBUG(errs() << "[infoflow]No AbstractLoc");
+      DEBUG(value.dump());
+     // assert(false && "abstract location not in solution!");
       return defaultTainted;
     }
   }
@@ -1406,10 +1406,13 @@ Infoflow::constrainIntrinsic(const IntrinsicInst & intr, Flows & flows) {
   case Intrinsic::exp:
   case Intrinsic::log:
   case Intrinsic::fma:
+  case Intrinsic::sadd_with_overflow:
     return this->operandsAndPCtoValue(intr, flows);
+  case Intrinsic::expect:
+    return;
   // Unsupported intrinsics
   default:
-    DEBUG(errs() << "Unsupported intrinsic: " << Intrinsic::getName(intr.getIntrinsicID()) << "\n");
+    DEBUG(errs() << "[infoflow]Unsupported intrinsic: type: "<< intr.getIntrinsicID() <<" Name: " << Intrinsic::getName(intr.getIntrinsicID()) << "\n");
   }
 }
 

@@ -10,7 +10,7 @@
 
 #include "Infoapp.h"
 
-#define __DIRECT__
+//#define __DIRECT__
 //#define __REACH__
 
 using std::set;
@@ -42,6 +42,15 @@ InfoAppPass::doInitialization() {
 void
 InfoAppPass::doFinalization() {
   DEBUG(errs() << "[InfoApp] doFinalization\n");
+  DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
+  DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
+  
+  for (;xi!=xe; xi++) {
+    //changed ones
+    if (xi->second) {
+      xi->first->dump();
+    }
+  }
 }
 
 bool
@@ -83,14 +92,15 @@ InfoAppPass::runOnModule(Module &M) {
           if (!func)
             continue;
           
-          /* XXX: fix it and extend it */
           if (func->getName() == "__ioc_report_add_overflow" ||
               func->getName() == "__ioc_report_sub_overflow" ||
               func->getName() == "__ioc_report_mul_overflow")
           {
             //check for arg. count
             assert(ci->getNumOperands() == 8);
-            
+            DEBUG(errs() << "[InfoApp]numOper:" << ci->getNumOperands() << "\n");
+            DEBUG(errs() << "[InfoApp]func_name:" << func->getName() << "\n");
+  
             std::stringstream SS;
             std::set<std::string> kinds;
             
@@ -101,8 +111,7 @@ InfoAppPass::runOnModule(Module &M) {
             Value* rval = ci->getOperand(5);
             
             infoflow->setUntainted(sinkKind, *lval);
-            
-            
+                        
             //tagging lVal
 #ifdef __DIRECT__
             infoflow->setDirectPtrUntainted(sinkKind, *lval);
@@ -125,7 +134,7 @@ InfoAppPass::runOnModule(Module &M) {
             
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
-            assert(ci->getNumOperands() == 8);
+            assert(ci->getNumOperands() == 10);
             
             std::stringstream SS;
             std::set<std::string> kinds;
@@ -162,6 +171,9 @@ InfoAppPass::trackSoln(Module &M,
                         CallInst* sinkCI,
                         std::string& kind)
 {
+  
+  DEBUG(errs() << "[InfoApp]trackSoln:" << "\n");
+  //by default do not change/replace.
   bool ret = false;
     
   //need optimization or parallelization
@@ -172,19 +184,22 @@ InfoAppPass::trackSoln(Module &M,
       for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
         //instruction is tainted
         if (checkBackwardTainted(*ii, soln)) {
+          DEBUG(errs() << "[InfoApp]checkBackwardTainted:");
+          DEBUG(ii->dump());
+          
           if (CallInst* ci = dyn_cast<CallInst>(ii)) {
             //check for whitelisting / blacklisting
             Function* func = ci->getCalledFunction();
 
             if (!func) continue;
             
+            //check for whitelist
             std::set<StringRef>::const_iterator wi =
                 whiteSet.find(func->getName());
             if (whiteSet.end() != wi) {
               
-              //trace back to confirm infoflow
               std::set<std::string> kinds;
-              std::string srcKind = "src" + kind;
+              std::string srcKind = "src0" + kind;
               kinds.insert(srcKind);
 
               infoflow->setTainted(srcKind, *ci);
@@ -194,19 +209,20 @@ InfoAppPass::trackSoln(Module &M,
 #ifdef __REACH__
               infoflow->setReachPtrTainted(srcKind, *ci);
 #endif
+              //trace back to confirm infoflow with forward slicing
               //explicit-flow and cutAfterSinks
               InfoflowSolution* fsoln =
                 infoflow->leastSolution(kinds, false, true);             
-              ret = ret && checkForwardTainted(*sinkCI, fsoln);
-              // ret = ret && true;
+              ret = checkForwardTainted(*sinkCI, fsoln);
+              // ret = true;
             }
             
+            //check for blacklist
             std::set<StringRef>::const_iterator bi =
                 blackSet.find(func->getName());
             if (blackSet.end() != bi) {
-              //trace back to confirm infoflow
               std::set<std::string> kinds;
-              std::string srcKind = "src" + kind;
+              std::string srcKind = "src1" + kind;
               kinds.insert(srcKind);
               
               infoflow->setTainted(srcKind, *ci);
@@ -216,13 +232,18 @@ InfoAppPass::trackSoln(Module &M,
 #ifdef __REACH__
               infoflow->setReachPtrTainted(srcKind, *ci);
 #endif
-              
+
+              //trace back to confirm infoflow with forward slicing
               //explicit-flow and cutAfterSinks
               InfoflowSolution* fsoln =
                 infoflow->leastSolution(kinds, false, true);
-              ret = ret && !checkForwardTainted(*sinkCI, fsoln);
-              // ret = ret && false;
+              
+              //tainted source detected! just get out
+              if (!checkForwardTainted(*sinkCI, fsoln))
+                return false;
             }
+          } else if (isConstAssign(*ii)) {
+            ret = true;
           }
         }
       }

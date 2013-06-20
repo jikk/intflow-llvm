@@ -48,7 +48,7 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
     std::set<const Value *> reachPtrSinks;
 
     // Add the arguments to the function as sources if necessary (e.g. main)
-    identifySourcesForFunction(*fun, sources, directPtrSources, reachPtrSources);
+    //identifySourcesForFunction(*fun, sources, directPtrSources, reachPtrSources);
     // Add sources and sinks that result from instructions
     for (inst_iterator I = inst_begin(*fun), E = inst_end(*fun); I != E; ++I) {
       Instruction *inst = &*I;
@@ -237,6 +237,7 @@ typedef struct CallTaintEntry {
   { true, { false, false, true }, false }
 
 static const struct CallTaintEntry SourceTaintSummaries[] = {
+#if 0
   // function  tainted values   tainted direct memory tainted root ptrs
   { "fopen",   TAINTS_RETURN_VAL,  TAINTS_RETURN_VAL, TAINTS_NOTHING },
   { "freopen", TAINTS_RETURN_VAL,  TAINTS_ARG_3_AND_RETURN_VAL, TAINTS_NOTHING },
@@ -280,6 +281,10 @@ static const struct CallTaintEntry SourceTaintSummaries[] = {
   { "tmpnam",  TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
   { "getenv",  TAINTS_RETURN_VAL,  TAINTS_RETURN_VAL, TAINTS_NOTHING },
   { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+#else
+  { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+#endif
+
 };
 
 static const struct CallTaintEntry SinkTaintSummaries[] = {
@@ -332,22 +337,22 @@ static const struct CallTaintEntry SinkTaintSummaries[] = {
   { "strdup",  TAINTS_NOTHING,     TAINTS_ARG_1,      TAINTS_NOTHING },
   { "____jf_return_arg", TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING },
 #else
-  { "system",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "system",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
 
-  { "exec",    TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execlp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execle",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execv",   TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execvp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execvpe", TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "exec",    TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execlp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execle",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execv",   TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execvp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execvpe", TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
 
-  { "malloc",  TAINTS_ARG_1,       TAINTS_NOTHING,    TAINTS_NOTHING },
-  { "calloc",  TAINTS_ARG_1_2,     TAINTS_NOTHING,    TAINTS_NOTHING },
-  { "realloc", TAINTS_ARG_2,       TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "malloc",  TAINTS_ARG_1,       TAINTS_NOTHING,    TAINTS_NOTHING },
+//   { "calloc",  TAINTS_ARG_1_2,     TAINTS_NOTHING,    TAINTS_NOTHING },
+//   { "realloc", TAINTS_ARG_2,       TAINTS_ARG_1,      TAINTS_NOTHING },
 
-  { "remove",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
-  { "unlink",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
-
+//   { "remove",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "unlink",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   {"", ,}
   { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 #endif
 };
@@ -432,6 +437,7 @@ static void identifyTaintForCallSite(
   set<const Value *> &TaintedDirectPointers,
   set<const Value *> &TaintedRootPointers
 ) {
+
   Function *CalledFunction = CS.getCalledFunction();
 
   // Only determine taint for external functions.

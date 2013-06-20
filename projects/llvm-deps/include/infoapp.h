@@ -56,6 +56,11 @@ class InfoAppPass : public ModulePass {
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln);
   
+    bool isConstAssign(Instruction& inst) {
+    //XXX: implement it!
+      return false;
+    }
+  
 };  //class
 
 /* ID for InfoAppPass */

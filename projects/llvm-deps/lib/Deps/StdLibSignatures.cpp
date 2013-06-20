@@ -61,6 +61,9 @@ static const C CallTable[] = {
   C("ungetc", Source(AllArgs), Sink(Ret)),
   C("vprintf", Source(AllArgs), Source(AllArgs, D), Sink(Ret)),
 
+  // infoapp entries
+  //C("lvm.sadd.with.overflow.i32", Source(AllArgs), Sink(Ret)),
+
   // TODO:
   C("fseek"),
   C("ftell"),

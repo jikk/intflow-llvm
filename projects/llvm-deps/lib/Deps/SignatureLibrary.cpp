@@ -106,7 +106,7 @@ NoFlows::process(const ContextID ctxt, const ImmutableCallSite cs) const {
 bool
 OverflowChecks::accept(const ContextID ctxt, const ImmutableCallSite cs) const {
   const Function * F = cs.getCalledFunction();
-  return F && F->getName().startswith("__ioc");
+  return F && F->getName().startswith("__jk");
 }
 
 std::vector<FlowRecord>
