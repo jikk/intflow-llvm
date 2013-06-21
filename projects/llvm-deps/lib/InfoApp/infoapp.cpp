@@ -9,7 +9,7 @@
 #include "Infoflow.h"
 #include "Slice.h"
 
-#include "Infoapp.h"
+#include "infoapp.h"
 //#define __REACH__
 
 using std::set;
@@ -17,6 +17,42 @@ using std::set;
 namespace deps {
 
 using namespace llvm;
+  
+  static void format_ioc_report_func(const Value* val, raw_string_ostream& rs) {
+  
+  const CallInst* ci = dyn_cast<CallInst>(val);
+  assert(ci && "CallInst casting check");
+  const Function* func = ci->getCalledFunction();
+  assert(ci && "Function casting check");
+  
+  //line & column
+  ConstantInt* line = dyn_cast<ConstantInt>(ci->getOperand(0));
+  assert(line && "constant int casting check");
+  
+  ConstantInt* col = dyn_cast<ConstantInt>(ci->getOperand(1));
+  assert(col && "constant int casting check");
+
+  rs << func->getName().str();
+
+  // XXX: how can i output char string?
+  //ci->getOperand(2)->print(rs);
+  rs << " (line ";
+  rs << line->getZExtValue();
+  rs << ", col ";
+  rs << col->getZExtValue() << ")";
+    
+
+  if (func->getName() == "__ioc_report_add_overflow" ||
+      func->getName() == "__ioc_report_sub_overflow" ||
+      func->getName() == "__ioc_report_mul_overflow")
+  {
+    ;
+  } else if (func->getName() == "__ioc_report_conversion") {
+    ;
+  } else {
+    assert(! "invalid function name");
+  }
+}
 
 static const struct CallTaintEntry bLstSourceSummaries[] = {
   // function  tainted values   tainted direct memory tainted root ptrs
@@ -32,7 +68,7 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
   
-//XXX: same function from SourceSinkAnalysis
+//XXX: same function defined from SourceSinkAnalysis
 static const CallTaintEntry *
 findEntryForFunction(const CallTaintEntry *Summaries,
                      const std::string &FuncName) {
@@ -60,11 +96,17 @@ InfoAppPass::doFinalization() {
   DEBUG(errs() << "[InfoApp] doFinalization\n");
   DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
   DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
-  
+
+
   for (;xi!=xe; xi++) {
+    std::string output;
+    raw_string_ostream rs(output);
+    format_ioc_report_func(xi->first, rs);
+    
     //changed ones
     errs() << "[InfoApp]xformMap:" << xi->second << ":";
-    xi->first->dump();
+    errs() << rs.str();
+    errs() << "\n";
   }
 }
 
@@ -77,6 +119,12 @@ InfoAppPass::runOnModule(Module &M) {
 
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
+    //XXX: implement something here ..
+    if (F.getName() == "") {
+      //removeChecksForFunction(F);
+      continue;
+    }
+    
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
       for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -165,6 +213,10 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
+          //XXX: implement from here
+          } else if (func->getName() == "") {
+            //XXX: lldiv, div, iconv ...
+            ;
           }
         }
       }
@@ -427,7 +479,7 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator ve = vMap.end();
 
   for (;vi!=ve; vi++) {
-    Value* val = (Value*) *vi;
+    const Value* val = (Value*) *vi;
     if (CallInst* ci = dyn_cast<CallInst>(val)) {
       Function* func = ci->getCalledFunction();
       if (func->getName().startswith("llvm.ssub.with.overflow")) {
