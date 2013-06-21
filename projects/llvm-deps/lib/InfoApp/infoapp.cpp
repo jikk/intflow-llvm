@@ -201,6 +201,7 @@ InfoAppPass::trackSoln(Module &M,
 
             if (!func) continue;
             
+            
             //check for white-listing
             const CallTaintEntry *entry =
               findEntryForFunction(wLstSourceSummaries, func->getName());
@@ -239,7 +240,7 @@ InfoAppPass::trackSoln(Module &M,
                    ArgIndex < dSum->NumArguments;
                    ++ArgIndex) {
                 
-                if (vSum->TaintsArgument[ArgIndex]) {
+                if (dSum->TaintsArgument[ArgIndex]) {
                   infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
                 }
               }
@@ -265,14 +266,27 @@ InfoAppPass::trackSoln(Module &M,
               
               Function* sinkFunc = sinkCI->getCalledFunction();
               if(sinkFunc->getName() == "__ioc_report_conversion") {
-                ret = checkForwardTainted(*(sinkCI->getOperand(7)), fsoln);
+                
+                if (checkForwardTainted(*(sinkCI->getOperand(7)), fsoln)) {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:white0: true\n");
+                  ret = true;
+                } else {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:white0: false\n");
+                  ret = false;
+                }
 
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
                          sinkFunc->getName() == "__ioc_report_mul_overflow")
               {
-                ret = (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
-                       checkForwardTainted(*(sinkCI->getOperand(5)), fsoln));
+                if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
+                    checkForwardTainted(*(sinkCI->getOperand(5)), fsoln)) {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:white1: true\n");
+                  ret = true;
+                } else {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:white1: false\n");
+                  ret = false;
+                }
 
               } else {
                 assert(false && "not __ioc_report function");
@@ -282,7 +296,7 @@ InfoAppPass::trackSoln(Module &M,
             //check for black-listing
             entry =
               findEntryForFunction(bLstSourceSummaries, func->getName());
-            
+
             if (entry->Name) {
               DEBUG(errs() << "[InfoApp]black-list:" << func->getName() <<"\n");
               std::set<std::string> kinds;
@@ -316,8 +330,8 @@ InfoAppPass::trackSoln(Module &M,
               for (unsigned ArgIndex = 0;
                    ArgIndex < dSum->NumArguments;
                    ++ArgIndex) {
-                
-                if (vSum->TaintsArgument[ArgIndex]) {
+
+                if (dSum->TaintsArgument[ArgIndex]) {
                   infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
                 }
               }
@@ -344,9 +358,13 @@ InfoAppPass::trackSoln(Module &M,
               Function* sinkFunc = sinkCI->getCalledFunction();
               if(sinkFunc->getName() == "__ioc_report_conversion") {
                 if (checkForwardTainted(*(sinkCI->getOperand(7)), fsoln)) {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:black0: true\n");
                   //tainted source detected! just get out
                   return false;
+                } else {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:black0: false\n");
                 }
+                
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
                          sinkFunc->getName() == "__ioc_report_mul_overflow")
@@ -354,7 +372,10 @@ InfoAppPass::trackSoln(Module &M,
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
                 {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:black1: true\n");
                   return false;
+                } else {
+                  DEBUG(errs() << "[InfoApp]checkForwardTainted:black1: false\n");
                 }
               } else {
                 assert(false && "not __ioc_report function");
