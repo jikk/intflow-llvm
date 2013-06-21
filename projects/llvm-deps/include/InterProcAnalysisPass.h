@@ -215,12 +215,15 @@ public:
 
     analyzedFunctions.clear();
 
+    DEBUG(errs() << "[DEPS] runOnModule:\n");
+
     // Add the main function to the queue. If there isn't
     // a main function, add any externally linkable functions.
     addStartItemsToWorkQueue();
     // Do work until we're done.
     while (!workQueue.empty()) {
       AnalysisUnit<C> unit = workQueue.dequeue();
+      DEBUG(errs() << "[DEPS]"<< unit.context() << ":" << unit.function().getName() << "\n");
       processAnalysisUnit(unit);
     }
 

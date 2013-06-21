@@ -86,6 +86,29 @@ public:
   /// isVargTainted - returns true if the security level of the varargs of
   /// the function is High.
   bool isVargTainted(const Function &);
+
+  /// jikk: added 
+  bool getSubst(const ConsElem& elem) {
+    return (soln->subst(elem) == highConstant);
+  }
+  
+  void getValueMap(std::set<const Value*>& vMap, bool backward=true)
+  {
+    DenseMap<const Value *, const ConsElem *>::iterator vi= valueMap.begin();
+    DenseMap<const Value *, const ConsElem *>::iterator ve= valueMap.end();
+    for (;vi!=ve;vi++) {
+      if (backward) {
+        if (!isTainted(*(vi->first))) {
+          vMap.insert(vi->first);
+        }
+      } else {  //forward
+        if (isTainted(*(vi->first))) {
+          vMap.insert(vi->first);
+        }
+      }
+    }
+  }
+
 private:
   InfoflowSolution & operator=(const InfoflowSolution& rhs);
 

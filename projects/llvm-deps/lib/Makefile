@@ -1,6 +1,6 @@
 LEVEL = ..
 
-DIRS = Constraints PointsToInterface SourceSinkAnalysis Deps
+DIRS = Constraints PointsToInterface SourceSinkAnalysis Deps InfoApp
 
 include $(LEVEL)/Makefile.common
 
