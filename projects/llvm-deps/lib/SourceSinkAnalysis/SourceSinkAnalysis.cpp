@@ -15,6 +15,7 @@
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/IntrinsicInst.h"
+#include "llvm/Support/Debug.h"
 #include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
 #include <string>
@@ -35,7 +36,7 @@ char SourceSinkAnalysis::ID;
 
 bool SourceSinkAnalysis::runOnModule(Module &M) {
   for (Module::iterator fun = M.begin(), fend = M.end(); fun != fend; ++fun) {
-    //errs() << "Adding sources and sinks from " << fun->getName() << "\n";
+    DEBUG(errs() << "[SrcSinkAnal] Adding sources and sinks from " << fun->getName() << "\n");
 
     std::set<const Value *> sources;
     std::set<const Value *> sinks;
@@ -47,13 +48,13 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
     std::set<const Value *> reachPtrSinks;
 
     // Add the arguments to the function as sources if necessary (e.g. main)
-    identifySourcesForFunction(*fun, sources, directPtrSources, reachPtrSources);
+    //identifySourcesForFunction(*fun, sources, directPtrSources, reachPtrSources);
     // Add sources and sinks that result from instructions
     for (inst_iterator I = inst_begin(*fun), E = inst_end(*fun); I != E; ++I) {
       Instruction *inst = &*I;
 
       // XXX don't consider these to be sinks for performance reasons in jitflow
-      /*
+#if 0
       if (LoadInst * load = dyn_cast<LoadInst>(inst)) {
 	// The pointer operand of a load is a sensitive sink
         //sinks.insert(load->getPointerOperand());
@@ -61,7 +62,7 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
         // The pointer operand of a store is a sensitive sink
         sinks.insert(store->getPointerOperand());
       } else 
-      */
+#endif
       if (CallInst *call = dyn_cast<CallInst>(inst)) {
         // Calls may add sources or sinks (for example input returned
         // via a system call may be a source or the argument to a system
@@ -103,21 +104,21 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
     }
     
     // Use the source and sink sets to generate constraints
-    //errs() << "sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] sources:\n");
     for (std::set<const Value *>::iterator value = sources.begin(), end = sources.end();
 	  value != end; ++value) {
         sourcesAndSinks.addSourceValue(**value);
         //infoflow->setTainted("source", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "direct sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] direct sources:\n");
     for (std::set<const Value *>::iterator value = directPtrSources.begin(), end = directPtrSources.end();
 	  value != end; ++value) {
         sourcesAndSinks.addSourceDirectPtr(**value);
         //infoflow->setDirectPtrTainted("source", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "reachable sources:\n";
+    DEBUG(errs() << "[SrcSinkAnal] reachable sources:\n");
     for (std::set<const Value *>::iterator value = reachPtrSources.begin(), end = reachPtrSources.end();
           value != end; ++value) {
         sourcesAndSinks.addSourceReachablePtr(**value);
@@ -125,28 +126,28 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
         //errs() << "\t" << **value << "\n";
     }
 
-    //errs() << "sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] sinks:\n");
     for (std::set<const Value *>::iterator value = sinks.begin(), end = sinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkValue(**value);
         //infoflow->setUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "direct sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] direct sinks:\n");
     for (std::set<const Value *>::iterator value = directPtrSinks.begin(), end = directPtrSinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkDirectPtr(**value);
         //infoflow->setDirectPtrUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "reachable sinks:\n";
+    DEBUG(errs() << "[SrcSinkAnal] reachable sinks:\n");
     for (std::set<const Value *>::iterator value = reachPtrSinks.begin(), end = reachPtrSinks.end();
           value != end; ++value) {
         sourcesAndSinks.addSinkReachablePtr(**value);
         //infoflow->setReachPtrUntainted("sink", **value);
-        //errs() << "\t" << **value << "\n";
+        DEBUG(errs() << "\t" << **value << "\n");
     }
-    //errs() << "\n";
+    DEBUG(errs() << "\n");
   }
 
   return false;
@@ -172,7 +173,7 @@ bool SourceSinkAnalysis::reachPtrIsSink(const Value & v) const {
   return sourcesAndSinks.reachPtrIsSink(v);
 }
 
-
+#if 0
 //
 // Structure which records which arguments should be marked tainted.
 //
@@ -182,7 +183,7 @@ typedef struct CallTaintSummary {
   bool TaintsArgument[NumArguments];
   bool TaintsVarargArguments;
 } CallTaintSummary;
-
+//
 //
 // Holds an entry for a single function, summarizing which arguments are
 // tainted values and which point to tainted memory.
@@ -234,8 +235,10 @@ typedef struct CallTaintEntry {
   { false, { true }, true }
 #define TAINTS_ARG_3_AND_RETURN_VAL \
   { true, { false, false, true }, false }
+#endif
 
 static const struct CallTaintEntry SourceTaintSummaries[] = {
+#if 0
   // function  tainted values   tainted direct memory tainted root ptrs
   { "fopen",   TAINTS_RETURN_VAL,  TAINTS_RETURN_VAL, TAINTS_NOTHING },
   { "freopen", TAINTS_RETURN_VAL,  TAINTS_ARG_3_AND_RETURN_VAL, TAINTS_NOTHING },
@@ -279,6 +282,10 @@ static const struct CallTaintEntry SourceTaintSummaries[] = {
   { "tmpnam",  TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
   { "getenv",  TAINTS_RETURN_VAL,  TAINTS_RETURN_VAL, TAINTS_NOTHING },
   { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+#else
+  { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+#endif
+
 };
 
 static const struct CallTaintEntry SinkTaintSummaries[] = {
@@ -331,25 +338,26 @@ static const struct CallTaintEntry SinkTaintSummaries[] = {
   { "strdup",  TAINTS_NOTHING,     TAINTS_ARG_1,      TAINTS_NOTHING },
   { "____jf_return_arg", TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING },
 #else
-  { "system",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "system",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
 
-  { "exec",    TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execlp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execle",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execv",   TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execvp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
-  { "execvpe", TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "exec",    TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execlp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execle",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execv",   TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execvp",  TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
+//   { "execvpe", TAINTS_ALL_ARGS,    TAINTS_ALL_ARGS,   TAINTS_NOTHING },
 
-  { "malloc",  TAINTS_ARG_1,       TAINTS_NOTHING,    TAINTS_NOTHING },
-  { "calloc",  TAINTS_ARG_1_2,     TAINTS_NOTHING,    TAINTS_NOTHING },
-  { "realloc", TAINTS_ARG_2,       TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "malloc",  TAINTS_ARG_1,       TAINTS_NOTHING,    TAINTS_NOTHING },
+//   { "calloc",  TAINTS_ARG_1_2,     TAINTS_NOTHING,    TAINTS_NOTHING },
+//   { "realloc", TAINTS_ARG_2,       TAINTS_ARG_1,      TAINTS_NOTHING },
 
-  { "remove",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
-  { "unlink",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
-
+//   { "remove",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   { "unlink",  TAINTS_ALL_ARGS,    TAINTS_ARG_1,      TAINTS_NOTHING },
+//   {"", ,}
   { 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 #endif
 };
+
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
 
 //
@@ -361,7 +369,7 @@ findEntryForFunction(const CallTaintEntry *Summaries,
                      const string &FuncName) {
   unsigned Index;
 
-  if (StringRef(FuncName).startswith("____jf_check"))
+  if (StringRef(FuncName).startswith("__ioc"))
     return &nothing;
 
   for (Index = 0; Summaries[Index].Name; ++Index) {
@@ -431,6 +439,7 @@ static void identifyTaintForCallSite(
   set<const Value *> &TaintedDirectPointers,
   set<const Value *> &TaintedRootPointers
 ) {
+
   Function *CalledFunction = CS.getCalledFunction();
 
   // Only determine taint for external functions.
