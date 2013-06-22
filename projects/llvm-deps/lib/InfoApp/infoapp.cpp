@@ -35,7 +35,12 @@ using namespace llvm;
   rs << func->getName().str();
 
   // XXX: how can i output char string?
-  //ci->getOperand(2)->print(rs);
+  ci->getOperand(2)->print(rs);
+    
+  ConstantArray* cd = dyn_cast<ConstantArray>(ci->getOperand(2));
+  assert(cd && "constant int casting check");
+  
+    
   rs << " (line ";
   rs << line->getZExtValue();
   rs << ", col ";
