@@ -181,8 +181,20 @@ InfoAppPass::runOnModule(Module &M) {
 
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
-            xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
-            
+ 	    
+	    //check for simple const. assignment
+            //getting valeMap
+            std::set<const Value *> vMap;
+            soln->getValueMap(vMap);
+
+            if(isConstAssign(vMap))
+            {
+              //replace it for simple const. assignment
+              xformMap[ci] = true;
+            } else {
+              xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+            }           
+
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
             assert(ci->getNumOperands() == 10);
