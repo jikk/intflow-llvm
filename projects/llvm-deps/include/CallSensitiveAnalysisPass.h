@@ -31,11 +31,11 @@ namespace llvm {
 /// are an input and output type for the user's analysis and a non-negative
 /// integer k.
 ///
-/// The input and output types must implement the operators for
-/// <=, ==, and !=, and be default constructible.
-/// Furthermore, each should implement:
-///  const T upperBound(const T & other) const
-/// Where the output should be the join of the instances.
+/// The input and output types -- in infoflow analysis, these are class Unit --
+/// must implement the operators for <=, ==, and !=, and be default
+/// constructible.  Furthermore, each should implement: const T upperBound(const
+/// T & other) const Where the output should be the join of the instances.
+
 template<class I, class O, int K, class C>
 class CallSensitiveAnalysisPass :
    public InterProcAnalysisPass<ContextID, I, O> {

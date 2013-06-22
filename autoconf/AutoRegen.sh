@@ -14,10 +14,10 @@ clean() {
 ### Periods should be escaped with backslash for use by grep.
 ###
 ### If you update these, please also update docs/GettingStarted.html
-want_autoconf_version='2\.69'
+want_autoconf_version='2\.67'
 want_autoheader_version=$want_autoconf_version
-want_aclocal_version='1\.12\.5'
-want_libtool_version='2\.4\.2'
+want_aclocal_version='1\.11\.1'
+want_libtool_version='2\.2\.6b'
 ### END NOTE #########################################################
 
 outfile=configure

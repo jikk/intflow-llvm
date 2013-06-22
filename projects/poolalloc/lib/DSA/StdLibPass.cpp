@@ -457,7 +457,7 @@ StdLibDataStructures::eraseCallsTo(Function* F) {
       if (CI->getCalledValue() == F) {
         DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
         //delete the call
-        DEBUG(errs() << "Removing " << F->getName().str() << " from "
+        DEBUG(errs() << "PA: Removing " << F->getName().str() << " from "
               << CI->getParent()->getParent()->getName().str() << "\n");
         ToRemove.insert(std::make_pair(Graph, F));
       }
@@ -465,7 +465,7 @@ StdLibDataStructures::eraseCallsTo(Function* F) {
       if (CI->getCalledValue() == F) {
         DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
         //delete the call
-        DEBUG(errs() << "Removing " << F->getName().str() << " from "
+        DEBUG(errs() << "PA: Removing " << F->getName().str() << " from "
               << CI->getParent()->getParent()->getName().str() << "\n");
         ToRemove.insert(std::make_pair(Graph, F));
       }
@@ -477,7 +477,7 @@ StdLibDataStructures::eraseCallsTo(Function* F) {
             if(CI->getCalledValue() == CE) {
               DSGraph* Graph = getDSGraph(*CI->getParent()->getParent());
               //delete the call
-              DEBUG(errs() << "Removing " << F->getName().str() << " from "
+              DEBUG(errs() << "PA: Removing " << F->getName().str() << " from "
                     << CI->getParent()->getParent()->getName().str() << "\n");
               ToRemove.insert(std::make_pair(Graph, F));
             }

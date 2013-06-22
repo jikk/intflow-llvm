@@ -46,8 +46,9 @@ static RegisterPass<PDTCache>
 Y ("pdtcache", "Cache PostDom Analysis Results", true, true);
   
 Infoflow::Infoflow () : 
-    CallSensitiveAnalysisPass<Unit,Unit,1,CallerContext>(ID, DepsCollapseExtContext, DepsCollapseIndContext),
-    kit(new LHConstraintKit()) { }
+    CallSensitiveAnalysisPass<Unit,Unit,1,CallerContext>
+       (ID, DepsCollapseExtContext, DepsCollapseIndContext),
+       kit(new LHConstraintKit()) { }
 
 void
 Infoflow::doInitialization() {
@@ -89,7 +90,7 @@ Infoflow::bottomOutput() const {
 
 const Unit
 Infoflow::runOnContext(const Infoflow::AUnitType unit, const Unit input) {
-  DEBUG(errs() << "Running on " << unit.function().getName() << " in context [";
+  DEBUG(errs() << "DEPS: Running on " << unit.function().getName() << " in context [";
   CM.getContextFor(unit.context()).dump();
   errs() << "]\n");
   generateFunctionConstraints(unit.function());
@@ -241,7 +242,7 @@ InfoflowSolution::isTainted(const Value & value) {
     const ConsElem & elem = *(entry->second);
     return (soln->subst(elem) == highConstant);
   } else {
-    DEBUG(errs() << "not in solution: " << value << "\n");
+    DEBUG(errs() << "[infoflow]not in solution: " << value << "\n");
     return defaultTainted;
   }
 }
@@ -249,8 +250,10 @@ InfoflowSolution::isTainted(const Value & value) {
 bool
 InfoflowSolution::isDirectPtrTainted(const Value & value) {
   const std::set<const AbstractLoc *> & locs = infoflow.locsForValue(value);
-  for (std::set<const AbstractLoc *>::const_iterator loc = locs.begin(), end = locs.end();
-        loc != end; ++loc) {
+  for (std::set<const AbstractLoc *>::const_iterator loc = locs.begin(),
+        end = locs.end();
+        loc != end;
+        ++loc) {
     DenseMap<const AbstractLoc *, const ConsElem *>::iterator entry = locMap.find(*loc);
     if (entry != locMap.end()) {
       const ConsElem & elem = *(entry->second);
@@ -258,7 +261,9 @@ InfoflowSolution::isDirectPtrTainted(const Value & value) {
         return true;
       }
     } else {
-      assert(false && "abstract location not in solution!");
+      DEBUG(errs() << "[infoflow]No AbstractLoc");
+      DEBUG(value.dump());
+     // assert(false && "abstract location not in solution!");
       return defaultTainted;
     }
   }
@@ -268,8 +273,10 @@ InfoflowSolution::isDirectPtrTainted(const Value & value) {
 bool
 InfoflowSolution::isReachPtrTainted(const Value & value) {
   const std::set<const AbstractLoc *> & locs = infoflow.reachableLocsForValue(value);
-  for (std::set<const AbstractLoc *>::iterator loc = locs.begin(), end = locs.end();
-        loc != end; ++loc) {
+  for (std::set<const AbstractLoc *>::iterator loc = locs.begin(), 
+         end = locs.end();
+         loc != end;
+         ++loc) {
     DenseMap<const AbstractLoc *, const ConsElem *>::iterator entry = locMap.find(*loc);
     if (entry != locMap.end()) {
       const ConsElem & elem = *(entry->second);
@@ -1399,10 +1406,13 @@ Infoflow::constrainIntrinsic(const IntrinsicInst & intr, Flows & flows) {
   case Intrinsic::exp:
   case Intrinsic::log:
   case Intrinsic::fma:
+  case Intrinsic::sadd_with_overflow:
     return this->operandsAndPCtoValue(intr, flows);
+  case Intrinsic::expect:
+    return;
   // Unsupported intrinsics
   default:
-    DEBUG(errs() << "Unsupported intrinsic: " << Intrinsic::getName(intr.getIntrinsicID()) << "\n");
+    DEBUG(errs() << "[infoflow]Unsupported intrinsic: type: "<< intr.getIntrinsicID() <<" Name: " << Intrinsic::getName(intr.getIntrinsicID()) << "\n");
   }
 }
 
