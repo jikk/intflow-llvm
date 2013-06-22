@@ -1540,6 +1540,16 @@ static void addIOCRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back(Args.MakeArgString(LibIOC));
 }
 
+static void addMem2RegLinux(const ToolChain &TC, const ArgList &Args,
+															ArgStringLIst &CmdArgs) {
+
+	// If no Mem2Reg flag was given, simply return
+	if (!Args.hasArg(options::OPT_mem2reg))
+		return;
+
+	//TODO 
+}
+
 static bool shouldUseFramePointer(const ArgList &Args,
                                   const llvm::Triple &Triple) {
   if (Arg *A = Args.getLastArg(options::OPT_fno_omit_frame_pointer,
@@ -6015,6 +6025,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   addAsanRTLinux(getToolChain(), Args, CmdArgs);
   addTsanRTLinux(getToolChain(), Args, CmdArgs);
   addIOCRTLinux(getToolChain(), Args, CmdArgs);
+	addMem2RegLinux(getToolChain(), Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
