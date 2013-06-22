@@ -479,7 +479,7 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator ve = vMap.end();
 
   for (;vi!=ve; vi++) {
-    const Value* val = (Value*) *vi;
+    Value* val = const_cast<Value *>(*vi);
     if (CallInst* ci = dyn_cast<CallInst>(val)) {
       Function* func = ci->getCalledFunction();
       if (func->getName().startswith("llvm.ssub.with.overflow")) {

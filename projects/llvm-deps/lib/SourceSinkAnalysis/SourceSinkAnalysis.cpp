@@ -54,7 +54,7 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
       Instruction *inst = &*I;
 
       // XXX don't consider these to be sinks for performance reasons in jitflow
-      /*
+#if 0
       if (LoadInst * load = dyn_cast<LoadInst>(inst)) {
 	// The pointer operand of a load is a sensitive sink
         //sinks.insert(load->getPointerOperand());
@@ -62,7 +62,7 @@ bool SourceSinkAnalysis::runOnModule(Module &M) {
         // The pointer operand of a store is a sensitive sink
         sinks.insert(store->getPointerOperand());
       } else 
-      */
+#endif
       if (CallInst *call = dyn_cast<CallInst>(inst)) {
         // Calls may add sources or sinks (for example input returned
         // via a system call may be a source or the argument to a system
@@ -173,68 +173,69 @@ bool SourceSinkAnalysis::reachPtrIsSink(const Value & v) const {
   return sourcesAndSinks.reachPtrIsSink(v);
 }
 
+#if 0
+//
+// Structure which records which arguments should be marked tainted.
+//
+typedef struct CallTaintSummary {
+  static const unsigned NumArguments = 10;
+  bool TaintsReturnValue;
+  bool TaintsArgument[NumArguments];
+  bool TaintsVarargArguments;
+} CallTaintSummary;
+//
+//
+// Holds an entry for a single function, summarizing which arguments are
+// tainted values and which point to tainted memory.
+//
+typedef struct CallTaintEntry {
+  const char *Name;
+  CallTaintSummary ValueSummary;
+  CallTaintSummary DirectPointerSummary;
+  CallTaintSummary RootPointerSummary;
+} CallTaintEntry;
 
-////
-//// Structure which records which arguments should be marked tainted.
-////
-//typedef struct CallTaintSummary {
-//  static const unsigned NumArguments = 10;
-//  bool TaintsReturnValue;
-//  bool TaintsArgument[NumArguments];
-//  bool TaintsVarargArguments;
-//} CallTaintSummary;
-//
-////
-//// Holds an entry for a single function, summarizing which arguments are
-//// tainted values and which point to tainted memory.
-////
-//typedef struct CallTaintEntry {
-//  const char *Name;
-//  CallTaintSummary ValueSummary;
-//  CallTaintSummary DirectPointerSummary;
-//  CallTaintSummary RootPointerSummary;
-//} CallTaintEntry;
-//
-//#define TAINTS_NOTHING \
-//  { false, { }, false }
-//#define TAINTS_ALL_ARGS { \
-//    false, \
-//    { true, true, true, true, true, true, true, true, true, true }, \
-//    true \
-//  }
-//#define TAINTS_VARARGS \
-//  { false, { }, true }
-//#define TAINTS_RETURN_VAL \
-//  { true, { }, false }
-//
-//#define TAINTS_ARG_1 \
-//  { false, { true }, false }
-//#define TAINTS_ARG_2 \
-//  { false, { false, true }, false }
-//#define TAINTS_ARG_3 \
-//  { false, { false, false, true }, false }
-//#define TAINTS_ARG_4 \
-//  { false, { false, false, false, true }, false }
-//
-//#define TAINTS_ARG_1_2 \
-//  { false, { true, true, false }, false }
-//#define TAINTS_ARG_1_3 \
-//  { false, { true, false, true }, false }
-//#define TAINTS_ARG_1_4 \
-//  { false, { true, false, false, true }, false }
-//
-//#define TAINTS_ARG_2_3 \
-//  { false, { false, true, true, false }, false }
-//#define TAINTS_ARG_3_4 \
-//  { false, { false, false, true, true }, false }
-//
-//#define TAINTS_ARG_1_2_3 \
-//  { false, { true, true, true }, false }
-//
-//#define TAINTS_ARG_1_AND_VARARGS \
-//  { false, { true }, true }
-//#define TAINTS_ARG_3_AND_RETURN_VAL \
-//  { true, { false, false, true }, false }
+#define TAINTS_NOTHING \
+  { false, { }, false }
+#define TAINTS_ALL_ARGS { \
+    false, \
+    { true, true, true, true, true, true, true, true, true, true }, \
+    true \
+  }
+#define TAINTS_VARARGS \
+  { false, { }, true }
+#define TAINTS_RETURN_VAL \
+  { true, { }, false }
+
+#define TAINTS_ARG_1 \
+  { false, { true }, false }
+#define TAINTS_ARG_2 \
+  { false, { false, true }, false }
+#define TAINTS_ARG_3 \
+  { false, { false, false, true }, false }
+#define TAINTS_ARG_4 \
+  { false, { false, false, false, true }, false }
+
+#define TAINTS_ARG_1_2 \
+  { false, { true, true, false }, false }
+#define TAINTS_ARG_1_3 \
+  { false, { true, false, true }, false }
+#define TAINTS_ARG_1_4 \
+  { false, { true, false, false, true }, false }
+
+#define TAINTS_ARG_2_3 \
+  { false, { false, true, true, false }, false }
+#define TAINTS_ARG_3_4 \
+  { false, { false, false, true, true }, false }
+
+#define TAINTS_ARG_1_2_3 \
+  { false, { true, true, true }, false }
+
+#define TAINTS_ARG_1_AND_VARARGS \
+  { false, { true }, true }
+#define TAINTS_ARG_3_AND_RETURN_VAL \
+  { true, { false, false, true }, false }
+#endif
 
 static const struct CallTaintEntry SourceTaintSummaries[] = {
 #if 0
