@@ -22,8 +22,8 @@
 #endif
 
 #include <stdint.h>
-#include <stdlib.h>
-#include <iconv.h>
+//#include <stdlib.h>
+//#include <iconv.h>
 
 #define XML_MSG                                     \
   "<structured_message>\n"                          \
@@ -79,12 +79,12 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
                              uint64_t src, uint8_t is_signed);
 
 
-div_t   __ioc_div(int numerator, int denominator);
-ldiv_t  __ioc_ldiv(int numerator, int denominator);
-lldiv_t __ioc_lldiv(int numerator, int denominator);
-size_t __ioc_iconv(iconv_t cd,
-                   char **inbuf, size_t *inbytesleft,
-                   char **outbuf, size_t *outbytesleft);
+// div_t   __ioc_div(int numerator, int denominator);
+// ldiv_t  __ioc_ldiv(int numerator, int denominator);
+// lldiv_t __ioc_lldiv(int numerator, int denominator);
+// size_t __ioc_iconv(iconv_t cd,
+//                    char **inbuf, size_t *inbytesleft,
+//                    char **outbuf, size_t *outbytesleft);
 
 
 #endif // _IOC_INTERFACE_H_
