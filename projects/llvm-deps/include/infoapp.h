@@ -46,6 +46,7 @@ class InfoAppPass : public ModulePass {
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
+    void removeChecksForFunction(Function& F) {;};
 
   
 };  //class

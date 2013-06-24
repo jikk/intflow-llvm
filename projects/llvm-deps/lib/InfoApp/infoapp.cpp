@@ -22,8 +22,9 @@ using namespace llvm;
   
   const CallInst* ci = dyn_cast<CallInst>(val);
   assert(ci && "CallInst casting check");
+
   const Function* func = ci->getCalledFunction();
-  assert(ci && "Function casting check");
+  assert(func && "Function casting check");
   
   //line & column
   ConstantInt* line = dyn_cast<ConstantInt>(ci->getOperand(0));
@@ -32,20 +33,24 @@ using namespace llvm;
   ConstantInt* col = dyn_cast<ConstantInt>(ci->getOperand(1));
   assert(col && "constant int casting check");
 
-  rs << func->getName().str();
-
-  // XXX: how can i output char string?
-  ci->getOperand(2)->print(rs);
-    
-  ConstantArray* cd = dyn_cast<ConstantArray>(ci->getOperand(2));
-  assert(cd && "constant int casting check");
+  //XXX: restructure
+  std::string fname = "NO_NAME";
+  Value* op0 = ci->getOperand(2);
+  if (Constant* gep = dyn_cast<Constant>(op0)) {
+    if (GlobalVariable* global = dyn_cast<GlobalVariable>(gep->getOperand(0))) {
+      if (ConstantDataArray* array = dyn_cast<ConstantDataArray>(global->getInitializer())) {
+        if (array->isCString())
+          fname = array->getAsCString();
+      }
+    }
+  }
   
-    
+  rs << func->getName().str() << ":";
+  rs << fname << ":" ;
   rs << " (line ";
   rs << line->getZExtValue();
   rs << ", col ";
   rs << col->getZExtValue() << ")";
-    
 
   if (func->getName() == "__ioc_report_add_overflow" ||
       func->getName() == "__ioc_report_sub_overflow" ||
@@ -126,7 +131,7 @@ InfoAppPass::runOnModule(Module &M) {
     Function& F = *mi;
     //XXX: implement something here ..
     if (F.getName() == "") {
-      //removeChecksForFunction(F);
+      removeChecksForFunction(F);
       continue;
     }
     
@@ -214,15 +219,23 @@ InfoAppPass::runOnModule(Module &M) {
             if(isConstAssign(vMap))
             {
               //replace it for simple const. assignment
+              DEBUG(errs() << "[InfoApp]isConstAssign:true" << "\n");
               xformMap[ci] = true;
+
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
           //XXX: implement from here
-          } else if (func->getName() == "") {
+          } else if ((func->getName() == "div")   ||
+                     (func->getName() == "ldiv")  ||
+                     (func->getName() == "lldiv")
+                     ) {
             //XXX: lldiv, div, iconv ...
             ;
-          }
+          } else if (func->getName() == "iconv") {
+            //XXX: iconv ...
+            ;
+          } 
         }
       }
     }
@@ -491,6 +504,8 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
         continue;
       } else {
         //XXX: need more for other function calls
+        DEBUG(errs() << "[InfoApp]isConstAssign:" << func->getName() <<"\n");
+        return false;
       }
     } else if (dyn_cast<const LoadInst>(val)) {
       return false;
