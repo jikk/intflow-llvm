@@ -528,7 +528,8 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
     const Value* val = (const Value*) *vi;
     if (const CallInst* ci = dyn_cast<const CallInst>(val)) {
       Function* func = ci->getCalledFunction();
-      if (func->getName().startswith("llvm.ssub.with.overflow")) {
+      //assert(func && "func should be fine!");
+      if (func && func->getName().startswith("llvm.ssub.with.overflow")) {
         continue;
       } else {
         //XXX: need more for other function calls
