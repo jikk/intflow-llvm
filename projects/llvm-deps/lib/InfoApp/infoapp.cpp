@@ -81,9 +81,10 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 };
 
 static const rmChecks rmCheckList[] = {
-  {"foo", true, true},
-  {"bar", false, false},
-  {0, false, false}
+//func      file        conv.   overflow  shift
+  {"foo",   "test.c",   true,   true,     true},
+  {"bar",   "test.c",   false,  false,    true},
+  {0,       0,          false,  false,    false}
 };
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
@@ -167,7 +168,6 @@ InfoAppPass::runOnModule(Module &M) {
            __ioc_report_div_error()
            __ioc_report_rem_error()
            __ioc_report_shl_bitwidth()
-           __ioc_report_shr_bitwidth()
            __ioc_report_shl_strict()
            */
           
@@ -242,7 +242,7 @@ InfoAppPass::runOnModule(Module &M) {
                      ) {
             
             FunctionType *ftype = func->getFunctionType();
-            std::string fname = "ioc_" + std::string(func->getName());
+            std::string fname = "__ioc_" + std::string(func->getName());
             
             Constant* ioc_wrapper = M.getOrInsertFunction(fname,
                                                        ftype,
@@ -532,8 +532,8 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   
 void
 InfoAppPass::removeChecksForFunction(Function& F) {
-  for (unsigned i=0; rmCheckList[i].fname; i++) {
-    if (F.getName() == rmCheckList[i].fname) {
+  for (unsigned i=0; rmCheckList[i].func; i++) {
+    if (F.getName() == rmCheckList[i].func) {
       DEBUG(errs() << F.getName() << "\n");
       for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
         BasicBlock& B = *bi;
@@ -543,8 +543,28 @@ InfoAppPass::removeChecksForFunction(Function& F) {
             if (!func)
               continue;
 
-            //XXX: implement something here...
+            if (rmCheckList[i].overflow) {
+              if((func->getName() == "__ioc_report_add_overflow") ||
+                 (func->getName() == "__ioc_report_sub_overflow") ||
+                 (func->getName() == "__ioc_report_mul_overflow")
+                 ) {
+                xformMap[ci] = true;
+              }
+            }
             
+            if (rmCheckList[i].conversion) {
+              if((func->getName() == "__ioc_report_add_overflow")) {
+                xformMap[ci] = true;
+              }
+            }
+
+            if (rmCheckList[i].shift) {
+              if((func->getName() == "__ioc_report_shl_bitwidth") ||
+                 (func->getName() == "__ioc_report_shl_strict")
+                 ) {
+                xformMap[ci] = true;
+              }
+            }
           }
         }
       }

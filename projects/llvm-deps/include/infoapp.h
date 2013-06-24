@@ -55,9 +55,11 @@ class InfoAppPass : public ModulePass {
 };  //class
   
 typedef  struct {
+  const char* func;
   const char* fname;
   bool conversion;
   bool overflow;
+  bool shift;
 } rmChecks;
 
 /* ID for InfoAppPass */
