@@ -9,9 +9,12 @@
 
 #include <set>
 
-namespace deps {
-
 using namespace llvm;
+using namespace deps;
+
+namespace  {
+
+
 
 class InfoAppPass : public ModulePass {  
   public:
@@ -46,17 +49,32 @@ class InfoAppPass : public ModulePass {
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
-    void removeChecksForFunction(Function& F) {;};
+    void removeChecksForFunction(Function& F);
 
   
 };  //class
+  
+typedef  struct {
+  const char* fname;
+  bool conversion;
+  bool overflow;
+} rmChecks;
 
 /* ID for InfoAppPass */
-char InfoAppPass::ID = 99;
+char InfoAppPass::ID = 0;
 
 static RegisterPass<InfoAppPass>
 XX ("infoapp", "implements infoapp", true, true);
-
+  
 }  // nameapce
 
+//namespace llvm {
+//  
+//INITIALIZE_PASS_BEGIN(InfoAppPass, "infoapp", "Promote Memory to Register",
+//                      false, false)
+////INITIALIZE_PASS_DEPENDENCY(PromotePass)
+//INITIALIZE_PASS_END(InfoAppPass, "infoapp", "Promote Memory to Register",
+//                    false, false)
+//  
+//}
 #endif

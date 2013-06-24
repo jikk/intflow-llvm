@@ -5,6 +5,7 @@
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include "Infoflow.h"
 #include "Slice.h"
@@ -14,9 +15,12 @@
 
 using std::set;
 
-namespace deps {
-
 using namespace llvm;
+using namespace deps;
+
+namespace {
+
+
   
   static void format_ioc_report_func(const Value* val, raw_string_ostream& rs) {
   
@@ -74,6 +78,12 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   // function  tainted values   tainted direct memory tainted root ptrs
   { "gettimeofday",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
   { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
+};
+
+static const rmChecks rmCheckList[] = {
+  {"foo", true, true},
+  {"bar", false, false},
+  {0, false, false}
 };
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
@@ -225,17 +235,21 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
-          //XXX: implement from here
           } else if ((func->getName() == "div")   ||
                      (func->getName() == "ldiv")  ||
-                     (func->getName() == "lldiv")
+                     (func->getName() == "lldiv") ||
+                     (func->getName() == "iconv")
                      ) {
-            //XXX: lldiv, div, iconv ...
-            ;
-          } else if (func->getName() == "iconv") {
-            //XXX: iconv ...
-            ;
-          } 
+            
+            FunctionType *ftype = func->getFunctionType();
+            std::string fname = "ioc_" + std::string(func->getName());
+            
+            Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                                                       ftype,
+                                                       func->getAttributes());
+            
+            ci->setCalledFunction(ioc_wrapper);
+          }
         }
       }
     }
@@ -514,6 +528,28 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
     }
   }
   return true;
+}
+  
+void
+InfoAppPass::removeChecksForFunction(Function& F) {
+  for (unsigned i=0; rmCheckList[i].fname; i++) {
+    if (F.getName() == rmCheckList[i].fname) {
+      DEBUG(errs() << F.getName() << "\n");
+      for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+        BasicBlock& B = *bi;
+        for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+          if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+            Function* func = ci->getCalledFunction();
+            if (!func)
+              continue;
+
+            //XXX: implement something here...
+            
+          }
+        }
+      }
+    }
+  }
 }
 
 }  //namespace deps
