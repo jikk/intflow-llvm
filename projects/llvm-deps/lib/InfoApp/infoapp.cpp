@@ -84,7 +84,17 @@ findEntryForFunction(const CallTaintEntry *Summaries,
   // Return the default summary.
   return &Summaries[Index];
 }
-  
+
+INITIALIZE_PASS(InfoAppPass, "info-app", "InfoAppPass", true, false)
+//FIXME Do we need the following as well?
+#if 1
+INITIALIZE_PASS_DEPENDENCY(LLVMDataStructure);
+INITIALIZE_PASS_DEPENDENCY(AssistDS);
+INITIALIZE_PASS_DEPENDENCY(PointsToInterface);
+INITIALIZE_PASS_DEPENDENCY(SourceSinkAnalysis);
+INITIALIZE_PASS_DEPENDENCY(Constraints);
+INITIALIZE_PASS_DEPENDENCY(Deps);
+#endif
 void
 InfoAppPass::doInitialization() {
   infoflow = &getAnalysis<Infoflow>();
@@ -494,6 +504,13 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
     }
   }
   return true;
+}
+
+//FIXME Don't know if this is correct as it is, or needs a fix
+//Probably we need the constructor for
+//ioc-llvm/tools/clang/lib/CodeGen/BackendUtil.cpp:
+ModulePass *llvm::createInfoAppPass() {
+	return new InfoAppPass();
 }
 
 }  //namespace deps

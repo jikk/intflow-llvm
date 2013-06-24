@@ -137,6 +137,12 @@ public:
 
 }
 
+//FIXME add the declaration if we end up using arguments
+//static unsigned InfoApp;
+static void addInfoAppPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
+  PM.add(createInfoAppPass());
+}
+
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
   if (Builder.OptLevel > 0)
     PM.add(createObjCARCAPElimPass());

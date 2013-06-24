@@ -594,6 +594,10 @@ public:
   /// potentially higher performance penalties.
   unsigned char BoundsChecking;
 
+  //FIXME this is probably not needed since InfoAppPass does not take 
+  //extra numerical args. Adding it jic
+  //unsigned char InfoAppPass;
+
   /// CatchUndefined - Emit run-time checks to catch undefined behaviors.
   bool CatchUndefined;
 
