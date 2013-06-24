@@ -82,8 +82,6 @@ typedef struct
   int rem;            /* Remainder.  */
 } div_t;
 
-
-
 // div_t   __ioc_div(int numerator, int denominator);
 // ldiv_t  __ioc_ldiv(int numerator, int denominator);
 // lldiv_t __ioc_lldiv(int numerator, int denominator);
