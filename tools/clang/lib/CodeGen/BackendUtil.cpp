@@ -225,6 +225,14 @@ void EmitAssemblyHelper::CreatePasses(TargetMachine *TM) {
                            addThreadSanitizerPass);
   }
 
+  if (CodeGenOpts.Mem2Reg) {
+    PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
+                           addInfoAppPass);
+    PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
+                           addInfoAppPass);
+  
+  }
+
   // Figure out TargetLibraryInfo.
   Triple TargetTriple(TheModule->getTargetTriple());
   PMBuilder.LibraryInfo = new TargetLibraryInfo(TargetTriple);
