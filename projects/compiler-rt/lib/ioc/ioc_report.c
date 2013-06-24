@@ -207,7 +207,7 @@ void __ioc_report_error(uint32_t line, uint32_t column,
 }
 
 
-/* div_t   __ioc_div(int numerator, int denominator) { */
+/* div_t  __ioc_div(int numerator, int denominator) { */
 /* #ifdef __OUTPUT_XML__ */
 /*   if (denominator == 0) { */
 /*     const char* msg = "div: divsion-by-zero"; */
@@ -264,5 +264,4 @@ void __ioc_report_error(uint32_t line, uint32_t column,
 /* #endif */
 /*   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft); */
 /* } */
- 
 

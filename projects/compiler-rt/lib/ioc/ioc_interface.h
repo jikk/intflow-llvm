@@ -18,12 +18,10 @@
 // Other platforms should be easy to add,
 // and probably work as-is.
 #if !defined(__linux__)
-//#error "IOC not supported for this platform!"
+#error "IOC not supported for this platform!"
 #endif
 
 #include <stdint.h>
-//#include <stdlib.h>
-//#include <iconv.h>
 
 #define XML_MSG                                     \
   "<structured_message>\n"                          \
@@ -78,6 +76,11 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
                              const char *dstty, const char *canondstty,
                              uint64_t src, uint8_t is_signed);
 
+typedef struct
+{
+  int quot;           /* Quotient.  */
+  int rem;            /* Remainder.  */
+} div_t;
 
 // div_t   __ioc_div(int numerator, int denominator);
 // ldiv_t  __ioc_ldiv(int numerator, int denominator);
