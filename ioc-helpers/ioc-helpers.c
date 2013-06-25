@@ -1,9 +1,25 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 #include "ioc-helpers.h"
 
 #define __OUTPUT_XML__
+
+char* parseFName(char* fname) {
+  
+  char* s;
+  int i;
+
+  for (i = strlen(fname), s = fname; i ; i--) {
+    if (fname[i] == '/') {
+      s = &fname[i];
+      s++;
+      break;
+    }
+  }
+  return s;
+}
 
 div_t   __ioc_div(int numerator, int denominator) {
 #ifdef __OUTPUT_XML__
@@ -69,6 +85,10 @@ int outputXML(char* log,
               uint32_t col,
               char* valStr) {
 
+  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
+      return 1;
+  }
+
   const char *entry_id = NULL;
   const char *tc  = NULL;
   const char *impact = NULL;
@@ -87,11 +107,12 @@ int outputXML(char* log,
 
   FILE *fp = fopen(FNAME, "w");
   if (!fp) {
-    //perror("Error opening file:");
+    perror("Error opening file:");
     return 0;
   }
   fprintf(fp, XML_MSG, entry_id, tc, impact, tc, log,
           fname, line, col, valStr);
   fclose(fp);
+  exit(-1);
   return 1;
 }
