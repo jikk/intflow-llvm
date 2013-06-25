@@ -14,11 +14,11 @@
 #include "ioc_interface.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
-#define __OUTPUT_XML__
+//#define __OUTPUT_XML__
 
+#ifdef __OUTPUT_XML__
 static
 int outputXML(char* log,
               char* fname,
@@ -52,6 +52,7 @@ int outputXML(char* log,
   fclose(fp);
   return 1;
 }
+#endif
 
 // Shared helper for reporting failed checks
 void __ioc_report_error(uint32_t line, uint32_t column,
@@ -263,5 +264,4 @@ void __ioc_report_error(uint32_t line, uint32_t column,
 /* #endif */
 /*   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft); */
 /* } */
-
 
