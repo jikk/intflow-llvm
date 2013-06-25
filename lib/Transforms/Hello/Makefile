@@ -9,7 +9,8 @@
 
 LEVEL = ../../..
 LIBRARYNAME = LLVMHello
-LOADABLE_MODULE = 1
+#LOADABLE_MODULE = 1
+BUILD_ARCHIVE = 1
 USEDLIBS =
 
 # If we don't need RTTI or EH, there's no reason to export anything

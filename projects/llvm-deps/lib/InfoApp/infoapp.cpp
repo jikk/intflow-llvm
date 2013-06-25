@@ -498,10 +498,9 @@ InfoApp::isConstAssign(const std::set<const Value *> vMap) {
 
 
 }  //namespace deps
-
 using namespace deps;
+using namespace llvm;
 
-namespace llvm {
 //FIXME Don't know if this is correct as it is, or needs a fix
 //Probably we need the constructor for
 //ioc-llvm/tools/clang/lib/CodeGen/BackendUtil.cpp:
@@ -517,6 +516,5 @@ INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", true, true)
 // INITIALIZE_PASS_DEPENDENCY(SourceSinkAnalysis);
 // INITIALIZE_PASS_DEPENDENCY(Constraints);
 // INITIALIZE_PASS_DEPENDENCY(Deps);
-;
+
 INITIALIZE_PASS_END(InfoApp, "InfoApp", "InfoApp", true, true)
-}
