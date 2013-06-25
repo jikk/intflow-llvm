@@ -587,4 +587,14 @@ void SourceSinkAnalysis::identifySourcesForFunction(
   }
 }
 
+} // namespace deps;
+
+using namespace deps;
+using namespace llvm;
+
+namespace llvm {
+
+ModulePass *createSourceSinkAnalysisPass() {
+	return new SourceSinkAnalysis();
+}
 }

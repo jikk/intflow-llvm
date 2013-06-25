@@ -265,6 +265,8 @@ void initializeLoopVectorizePass(PassRegistry&);
 void initializeBBVectorizePass(PassRegistry&);
 void initializeMachineFunctionPrinterPassPass(PassRegistry&);
 void initializeInfoAppPass(PassRegistry&);
+void initializePointsToInterfacePass(PassRegistry&);
+void initializeSourceSinkAnalysisPass(PassRegistry&);
 }
 
 #endif

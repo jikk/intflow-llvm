@@ -180,4 +180,25 @@ PointsToInterface::findReachableAbstractLocSetForNode(AbstractLocSet &Set,
     ;
 }
 
+} 	//namespace deps
+using namespace deps;
+using namespace llvm;
+
+namespace llvm {
+
+ModulePass *createPointsToInterfacePass() {
+	return new PointsToInterface();
 }
+}
+
+INITIALIZE_PASS_BEGIN(PointsToInterface,
+					"PointsToInterface",
+					"PointsToInterface",
+					false,
+					true)
+
+INITIALIZE_PASS_END(PointsToInterface,
+					"PointsToInterface",
+					"PointsToInterface",
+					false,
+					true)

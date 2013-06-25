@@ -60,7 +60,9 @@ private:
 public:
   static char ID;
 
-  PointsToInterface() : ModulePass(ID) {}
+  PointsToInterface() : ModulePass(ID) {
+  	initializePointsToInterfacePass(*PassRegistry::getPassRegistry());
+  }
 
   virtual bool runOnModule(Module &M);
 

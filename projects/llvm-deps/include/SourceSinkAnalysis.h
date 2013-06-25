@@ -29,7 +29,9 @@ class SourceSinkAnalysis : public ModulePass {
 public:
   static char ID;
 
-  SourceSinkAnalysis() : ModulePass(ID) {}
+  SourceSinkAnalysis() : ModulePass(ID) {
+   initializeSourceSinkAnalysisPass(*PassRegistry::getPassRegistry());
+  }
 
   void visitCallInst(CallInst &CI);
 
