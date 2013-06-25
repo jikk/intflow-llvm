@@ -50,8 +50,10 @@ class InfoAppPass : public ModulePass {
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
     void removeChecksForFunction(Function& F);
-
-  
+    void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
+    uint64_t getIntFromVal(Value* val);
+    uint64_t getColFromVal(Value* val);
+  void getStringFromVal(Value* val, std::string& output);
 };  //class
   
 typedef  struct {

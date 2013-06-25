@@ -13,6 +13,10 @@
 #include "infoapp.h"
 //#define __REACH__
 
+//#define __DBG__
+#define DBG_LINE 322
+#define DBG_COL 23
+
 using std::set;
 
 using namespace llvm;
@@ -20,9 +24,9 @@ using namespace deps;
 
 namespace {
 
-
-  
-  static void format_ioc_report_func(const Value* val, raw_string_ostream& rs) {
+  void
+  InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
+  {
   
   const CallInst* ci = dyn_cast<CallInst>(val);
   assert(ci && "CallInst casting check");
@@ -31,34 +35,25 @@ namespace {
   assert(func && "Function casting check");
   
   //line & column
-  ConstantInt* line = dyn_cast<ConstantInt>(ci->getOperand(0));
-  assert(line && "constant int casting check");
-  
-  ConstantInt* col = dyn_cast<ConstantInt>(ci->getOperand(1));
-  assert(col && "constant int casting check");
+  uint64_t line = getIntFromVal(ci->getOperand(0));
+  uint64_t col = getIntFromVal(ci->getOperand(1));
 
   //XXX: restructure
-  std::string fname = "NO_NAME";
-  Value* op0 = ci->getOperand(2);
-  if (Constant* gep = dyn_cast<Constant>(op0)) {
-    if (GlobalVariable* global = dyn_cast<GlobalVariable>(gep->getOperand(0))) {
-      if (ConstantDataArray* array = dyn_cast<ConstantDataArray>(global->getInitializer())) {
-        if (array->isCString())
-          fname = array->getAsCString();
-      }
-    }
-  }
-  
+  std::string fname = "";
+  getStringFromVal(ci->getOperand(2), fname);
+    
   rs << func->getName().str() << ":";
   rs << fname << ":" ;
   rs << " (line ";
-  rs << line->getZExtValue();
+  rs << line;
   rs << ", col ";
-  rs << col->getZExtValue() << ")";
+  rs << col << ")";
 
+  //ioc_report_* specific items
   if (func->getName() == "__ioc_report_add_overflow" ||
       func->getName() == "__ioc_report_sub_overflow" ||
-      func->getName() == "__ioc_report_mul_overflow")
+      func->getName() == "__ioc_report_mul_overflow" ||
+      func->getName() == "__ioc_report_shl_strict")
   {
     ;
   } else if (func->getName() == "__ioc_report_conversion") {
@@ -177,8 +172,17 @@ InfoAppPass::runOnModule(Module &M) {
           
           if (func->getName() == "__ioc_report_add_overflow" ||
               func->getName() == "__ioc_report_sub_overflow" ||
-              func->getName() == "__ioc_report_mul_overflow")
+              func->getName() == "__ioc_report_mul_overflow" ||
+              func->getName() == "__ioc_report_shl_strict")
           {
+#ifdef __DBG__
+            uint32_t line = getIntFromVal(ci->getOperand(0));
+            uint32_t col  = getIntFromVal(ci->getOperand(1));
+            
+            if (line != DBG_LINE || col != DBG_COL)
+              continue;
+#endif
+            
             //check for arg. count
             assert(ci->getNumOperands() == 8);
             DEBUG(errs() << "[InfoApp]numOper:" << ci->getNumOperands() << "\n");
@@ -220,6 +224,14 @@ InfoAppPass::runOnModule(Module &M) {
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
             assert(ci->getNumOperands() == 10);
+            
+#ifdef __DBG__
+            uint32_t line = getIntFromVal(ci->getOperand(0));
+            uint32_t col  = getIntFromVal(ci->getOperand(1));
+            
+            if (line != DBG_LINE || col != DBG_COL)
+              continue;
+#endif
             
             std::stringstream SS;
             std::set<std::string> kinds;
@@ -286,6 +298,10 @@ InfoAppPass::trackSoln(Module &M,
   //need optimization or parallelization
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
+  
+    if (F.getName() != (sinkCI->getParent()->getParent()->getName())) {
+      continue;
+    }
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
       for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -375,7 +391,8 @@ InfoAppPass::trackSoln(Module &M,
 
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                         sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln)) {
@@ -465,7 +482,8 @@ InfoAppPass::trackSoln(Module &M,
                 
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                         sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
@@ -587,4 +605,23 @@ InfoAppPass::removeChecksForFunction(Function& F) {
   }
 }
 
+uint64_t
+InfoAppPass::getIntFromVal(Value* val) {
+  ConstantInt* num = dyn_cast<ConstantInt>(val);
+  assert(num && "constant int casting check");
+  return num->getZExtValue();
+}
+
+void
+  InfoAppPass::getStringFromVal(Value* val, std::string& output) {
+  Constant* gep = dyn_cast<Constant>(val);
+  assert(gep && "assertion");
+  GlobalVariable* global = dyn_cast<GlobalVariable>(gep->getOperand(0));
+  assert(global && "assertion");
+  ConstantDataArray* array = dyn_cast<ConstantDataArray>(global->getInitializer());
+  if (array->isCString()) {
+    output = array->getAsCString();
+  }
+}
+  
 }  //namespace deps
