@@ -504,11 +504,14 @@ using namespace llvm;
 //FIXME Don't know if this is correct as it is, or needs a fix
 //Probably we need the constructor for
 //ioc-llvm/tools/clang/lib/CodeGen/BackendUtil.cpp:
+namespace llvm {
+
 ModulePass *createInfoAppPass() {
 	return new InfoApp();
 }
+}
 
-INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", true, true)
+INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", false, true)
 
 // INITIALIZE_PASS_DEPENDENCY(LLVMDataStructure);
 // INITIALIZE_PASS_DEPENDENCY(AssistDS);
@@ -517,4 +520,4 @@ INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", true, true)
 // INITIALIZE_PASS_DEPENDENCY(Constraints);
 // INITIALIZE_PASS_DEPENDENCY(Deps);
 
-INITIALIZE_PASS_END(InfoApp, "InfoApp", "InfoApp", true, true)
+INITIALIZE_PASS_END(InfoApp, "InfoApp", "InfoApp", false, true)

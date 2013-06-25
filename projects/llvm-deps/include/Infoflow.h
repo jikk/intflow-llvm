@@ -131,7 +131,8 @@ class Infoflow :
 
   public:
     static char ID;
-    Infoflow ();
+  Infoflow ();
+
   virtual ~Infoflow() { delete kit; delete signatureRegistrar; }
     const char *getPassName() const { return "Infoflow"; }
     virtual void getAnalysisUsage(AnalysisUsage &AU) const {
