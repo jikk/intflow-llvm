@@ -53,6 +53,8 @@ namespace {
   if (func->getName() == "__ioc_report_add_overflow" ||
       func->getName() == "__ioc_report_sub_overflow" ||
       func->getName() == "__ioc_report_mul_overflow" ||
+      func->getName() == "__ioc_report_shr_bitwidth" ||
+      func->getName() == "__ioc_report_shl_bitwidth" ||
       func->getName() == "__ioc_report_shl_strict")
   {
     ;
@@ -173,6 +175,8 @@ InfoAppPass::runOnModule(Module &M) {
           if (func->getName() == "__ioc_report_add_overflow" ||
               func->getName() == "__ioc_report_sub_overflow" ||
               func->getName() == "__ioc_report_mul_overflow" ||
+              func->getName() == "__ioc_report_shr_bitwidth" ||
+              func->getName() == "__ioc_report_shl_bitwidth" ||
               func->getName() == "__ioc_report_shl_strict")
           {
 #ifdef __DBG__
@@ -392,6 +396,8 @@ InfoAppPass::trackSoln(Module &M,
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
                          sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shr_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_bitwidth" ||
                          sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
@@ -483,6 +489,8 @@ InfoAppPass::trackSoln(Module &M,
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
                          sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shr_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_bitwidth" ||
                          sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
@@ -592,7 +600,8 @@ InfoAppPass::removeChecksForFunction(Function& F) {
             }
 
             if (rmCheckList[i].shift) {
-              if((func->getName() == "__ioc_report_shl_bitwidth") ||
+              if((func->getName() == "__ioc_report_shr_bitwidth") ||
+                 (func->getName() == "__ioc_report_shl_bitwidth") ||
                  (func->getName() == "__ioc_report_shl_strict")
                  ) {
                 xformMap[ci] = true;
