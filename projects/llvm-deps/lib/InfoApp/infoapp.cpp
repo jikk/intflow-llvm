@@ -9,7 +9,7 @@
 #include "Infoflow.h"
 #include "Slice.h"
 
-#include "infoapp.h"
+#include "InfoApp.h"
 //#define __REACH__
 
 using std::set;
@@ -85,24 +85,23 @@ findEntryForFunction(const CallTaintEntry *Summaries,
   return &Summaries[Index];
 }
 
-INITIALIZE_PASS(InfoAppPass, "info-app", "InfoAppPass", true, false)
-//FIXME Do we need the following as well?
-#if 1
+INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", true, true)
 INITIALIZE_PASS_DEPENDENCY(LLVMDataStructure);
 INITIALIZE_PASS_DEPENDENCY(AssistDS);
 INITIALIZE_PASS_DEPENDENCY(PointsToInterface);
 INITIALIZE_PASS_DEPENDENCY(SourceSinkAnalysis);
 INITIALIZE_PASS_DEPENDENCY(Constraints);
 INITIALIZE_PASS_DEPENDENCY(Deps);
-#endif
+INITIALIZE_PASS_END(InfoApp, "InfoApp", "InfoApp", true, true)
+
 void
-InfoAppPass::doInitialization() {
+InfoApp::doInitialization() {
   infoflow = &getAnalysis<Infoflow>();
   DEBUG(errs() << "[InfoApp] doInitialization\n");
 }
 
 void
-InfoAppPass::doFinalization() {
+InfoApp::doFinalization() {
   DEBUG(errs() << "[InfoApp] doFinalization\n");
   DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
   DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
@@ -121,7 +120,7 @@ InfoAppPass::doFinalization() {
 }
 
 bool
-InfoAppPass::runOnModule(Module &M) {
+InfoApp::runOnModule(Module &M) {
   //assigning unique IDs to each overflow locations.
   static uint64_t unique_id = 0;
 
@@ -238,7 +237,7 @@ InfoAppPass::runOnModule(Module &M) {
 
 //XXX: now it is too messy. the function need some clean-up  
 bool
-InfoAppPass::trackSoln(Module &M,
+InfoApp::trackSoln(Module &M,
                         InfoflowSolution* soln,
                         CallInst* sinkCI,
                         std::string& kind)
@@ -452,7 +451,7 @@ InfoAppPass::trackSoln(Module &M,
 }
 
 bool
-InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
+InfoApp::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 {
   bool ret = (!soln->isTainted(V));
   
@@ -468,7 +467,7 @@ InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 }
   
 bool
-InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
+InfoApp::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 {
   bool ret = (soln->isTainted(V));
 
@@ -484,7 +483,7 @@ InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 }
 
 bool
-InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
+InfoApp::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator vi = vMap.begin();
   std::set<const Value *>::const_iterator ve = vMap.end();
 
@@ -509,8 +508,8 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
 //FIXME Don't know if this is correct as it is, or needs a fix
 //Probably we need the constructor for
 //ioc-llvm/tools/clang/lib/CodeGen/BackendUtil.cpp:
-ModulePass *llvm::createInfoAppPassPass() {
-	return new InfoAppPass();
+ModulePass *llvm::createInfoAppPass() {
+	return new InfoApp();
 }
 
 }  //namespace deps
