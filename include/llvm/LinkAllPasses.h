@@ -157,7 +157,6 @@ namespace {
       (void) llvm::createInstructionSimplifierPass();
       (void) llvm::createLoopVectorizePass();
       (void) llvm::createBBVectorizePass();
-	//  (void) llvm::createInfoAppPassPass();
 
       (void)new llvm::IntervalPartition();
       (void)new llvm::FindUsedTypes();

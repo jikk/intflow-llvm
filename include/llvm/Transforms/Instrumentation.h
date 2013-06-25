@@ -22,9 +22,6 @@ class FunctionPass;
 // Insert edge profiling instrumentation
 ModulePass *createEdgeProfilerPass();
 
-// Inert Info App pass
-//ModulePass *createInfoAppPassPass();
-
 // Insert optimal edge profiling instrumentation
 ModulePass *createOptimalEdgeProfilerPass();
 

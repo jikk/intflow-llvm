@@ -372,14 +372,6 @@ extern char &InstructionSimplifierID;
 // "block_weights" metadata.
 FunctionPass *createLowerExpectIntrinsicPass();
 
-
-//===----------------------------------------------------------------------===//
-//
-// InfoAppPass
-//
-Pass *createInfoAppPassPass();
-extern char &InfoAppPassID;
-
 } // End llvm namespace
 
 #endif

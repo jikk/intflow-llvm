@@ -21,6 +21,7 @@
 
 namespace llvm {
 
+  class ModulePass;
   class FunctionPass;
   class MachineFunctionPass;
   class PassInfo;
@@ -509,8 +510,8 @@ namespace llvm {
   /// bundles (created earlier, e.g. during pre-RA scheduling).
   extern char &FinalizeMachineBundlesID;
 
-  // Here for InfoAppPass
-  extern char &InfoAppPassID;
+  ModulePass *createInfoAppPass();
+  extern char &InfoAppID;
 } // End llvm namespace
 
 #endif

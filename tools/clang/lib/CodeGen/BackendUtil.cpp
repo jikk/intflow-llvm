@@ -137,10 +137,8 @@ public:
 
 }
 
-//FIXME add the declaration if we end up using arguments
-//static unsigned InfoApp;
-static void addInfoAppPassPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
-  PM.add(createInfoAppPassPass());
+static void addInfoAppPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
+  PM.add(createInfoAppPass());
 }
 
 static void addObjCARCAPElimPass(const PassManagerBuilder &Builder, PassManagerBase &PM) {
@@ -227,9 +225,9 @@ void EmitAssemblyHelper::CreatePasses(TargetMachine *TM) {
 
   if (CodeGenOpts.Mem2Reg) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
-                           addInfoAppPassPass);
+                           addInfoAppPass);
     PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,
-                           addInfoAppPassPass);
+                           addInfoAppPass);
   
   }
 

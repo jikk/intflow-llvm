@@ -211,8 +211,6 @@ namespace llvm {
   //
   FunctionPass *createMemDepPrinter();
 
-  // InfoApp Pass
-  //Pass *createInfoAppPassPass();
 }
 
 #endif
