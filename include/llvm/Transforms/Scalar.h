@@ -377,7 +377,7 @@ FunctionPass *createLowerExpectIntrinsicPass();
 //
 // InfoAppPass
 //
-ModulePassPass *createInfoAppPassPass();
+Pass *createInfoAppPassPass();
 extern char &InfoAppPassID;
 
 } // End llvm namespace

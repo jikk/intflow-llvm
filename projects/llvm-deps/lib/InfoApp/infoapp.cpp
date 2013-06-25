@@ -509,7 +509,7 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
 //FIXME Don't know if this is correct as it is, or needs a fix
 //Probably we need the constructor for
 //ioc-llvm/tools/clang/lib/CodeGen/BackendUtil.cpp:
-ModulePass *llvm::createInfoAppPass() {
+ModulePass *llvm::createInfoAppPassPass() {
 	return new InfoAppPass();
 }
 
