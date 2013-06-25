@@ -23,28 +23,6 @@
 
 #include <stdint.h>
 
-#define XML_MSG                                     \
-  "<structured_message>\n"                          \
-  "<message_type>found_cwe</message_type>\n"        \
-  "<cwe_entry_id>%s</cwe_entry_id>\n"               \
-  "</structured_message>\n"                         \
-  "<structured_message>\n"                          \
-  "<message_type>controlled_exit</message_type>\n"  \
-  "<test_case>%s</test_case>\n"                     \
-  "</structured_message>\n"                         \
-  "<structured_message>\n"                          \
-  "<message_type>technical_impact</message_type>\n" \
-  "<impact>%s</impact>\n"                           \
-  "<test_case>%s</test_case>\n"                     \
-  "</structured_message>\n"                         \
-  "<!-- error class: %s   -->\n"                    \
-  "<!-- file: %s   -->\n"                           \
-  "<!-- line: %d   -->\n"                           \
-  "<!-- colunm: %d   -->\n"                         \
-  "<!-- value string: %s -->\n"
-
-#define FNAME "/tmp/log.txt"
-
 
 void __ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *expstr,

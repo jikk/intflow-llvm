@@ -349,8 +349,8 @@ int main(int argc_, const char **argv_) {
       )
   {
 //     argv_[argc_++] = "-fioc-unsigned";
-//     argv_[argc_++] = "-fioc-signed";
-//     argv_[argc_++] = "-fioc-implicit-conversion";
+     argv_[argc_++] = "-fioc-signed";
+     argv_[argc_++] = "-fioc-implicit-conversion";
 //     argv_[argc_++] = "-fioc-explicit-conversion";
 //     argv_[argc_++] = "-fioc-shifts";
 //     argv_[argc_++] = "-fioc-strict-shifts";

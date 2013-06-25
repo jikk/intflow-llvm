@@ -1,4 +1,9 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
 #include "ioc-helpers.h"
+
+#define __OUTPUT_XML__
 
 div_t   __ioc_div(int numerator, int denominator) {
 #ifdef __OUTPUT_XML__
@@ -56,4 +61,37 @@ size_t __ioc_iconv(iconv_t cd,
 #else
 #endif
   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
+}
+
+int outputXML(char* log,
+              char* fname,
+              uint32_t line,
+              uint32_t col,
+              char* valStr) {
+
+  const char *entry_id = NULL;
+  const char *tc  = NULL;
+  const char *impact = NULL;
+
+  entry_id = getenv("ENTRY_ID");
+  if (entry_id == NULL)
+    entry_id = (char *) "EID_NEEDED";
+
+  tc = getenv("TESTCASE");
+  if (tc == NULL)
+    tc = (char *) "TESTCASE_NEEDED";
+
+  impact = getenv("IMPACT");
+  if (impact == NULL)
+    impact = (char *) "IMPACT_NEEDED";
+
+  FILE *fp = fopen(FNAME, "w");
+  if (!fp) {
+    //perror("Error opening file:");
+    return 0;
+  }
+  fprintf(fp, XML_MSG, entry_id, tc, impact, tc, log,
+          fname, line, col, valStr);
+  fclose(fp);
+  return 1;
 }

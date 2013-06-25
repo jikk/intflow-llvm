@@ -12,46 +12,20 @@
 //===----------------------------------------------------------------------===//
 
 #include "ioc_interface.h"
+//#include "sanitizer_common.h"
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
-//#define __OUTPUT_XML__
+#define __OUTPUT_XML__
 
 #ifdef __OUTPUT_XML__
-static
 int outputXML(char* log,
               char* fname,
               uint32_t line,
               uint32_t col,
-              char* valStr) {
-
-  const char *entry_id = NULL;
-  const char *tc  = NULL;
-  const char *impact = NULL;
-  
-  entry_id = getenv("ENTRY_ID");
-  if (entry_id == NULL)
-    entry_id = (char *) "EID_NEEDED";
-  
-  tc = getenv("TESTCASE");
-  if (tc == NULL)
-    tc = (char *) "TESTCASE_NEEDED";
-  
-  impact = getenv("IMPACT");
-  if (impact == NULL)
-    impact = (char *) "IMPACT_NEEDED";
-  
-  FILE *fp = fopen(FNAME, "w");
-  if (!fp) {
-    //perror("Error opening file:");
-    return 0;
-  }
-  fprintf(fp, XML_MSG, entry_id, tc, impact, tc, log,
-          fname, line, col, valStr);
-  fclose(fp);
-  return 1;
-}
+              char* valStr);
 #endif
 
 // Shared helper for reporting failed checks
@@ -162,6 +136,7 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
           srcty, canonsrcty, dstty, canondstty);
   
   outputXML(log, (char*) filename, line, column, srcstr);
+  //_exit(-1);
 #else
   fprintf(stderr, "%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
                   " from '%s' (%s) to '%s' (%s)\n",
