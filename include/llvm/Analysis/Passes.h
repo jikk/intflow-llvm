@@ -210,6 +210,9 @@ namespace llvm {
   // information and prints it with -analyze.
   //
   FunctionPass *createMemDepPrinter();
+
+  // InfoApp Pass
+  ModulePass *createInfoAppPass();
 }
 
 #endif

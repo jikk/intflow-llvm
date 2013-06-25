@@ -509,6 +509,8 @@ namespace llvm {
   /// bundles (created earlier, e.g. during pre-RA scheduling).
   extern char &FinalizeMachineBundlesID;
 
+  // Here for InfoAppPass
+  extern char &InfoAppPassID;
 } // End llvm namespace
 
 #endif

@@ -373,6 +373,13 @@ extern char &InstructionSimplifierID;
 FunctionPass *createLowerExpectIntrinsicPass();
 
 
+//===----------------------------------------------------------------------===//
+//
+// InfoAppPass
+//
+ModulePassPass *createInfoAppPassPass();
+extern char &InfoAppPassID;
+
 } // End llvm namespace
 
 #endif

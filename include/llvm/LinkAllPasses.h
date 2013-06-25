@@ -158,6 +158,7 @@ namespace {
       (void) llvm::createLoopVectorizePass();
       (void) llvm::createBBVectorizePass();
 
+	  //(void)new llvm::createInfoAppPass();
       (void)new llvm::IntervalPartition();
       (void)new llvm::FindUsedTypes();
       (void)new llvm::ScalarEvolution();

@@ -1542,7 +1542,7 @@ static void addIOCRTLinux(const ToolChain &TC, const ArgList &Args,
 
 //FIXME perhaps this needs to be removed completely
 static void addMem2RegLinux(const ToolChain &TC, const ArgList &Args,
-			ArgStringLIst &CmdArgs) {
+			ArgStringList &CmdArgs) {
 
 	// If no Mem2Reg flag was given, simply return
 	if (!Args.hasArg(options::OPT_mem2reg))
