@@ -60,7 +60,7 @@ CODEGENOPT(InstrumentForProfiling , 1, 0) ///< Set when -pg is enabled.
 CODEGENOPT(LessPreciseFPMAD  , 1, 0) ///< Enable less precise MAD instructions to
                                      ///< be generated.
 CODEGENOPT(MergeAllConstants , 1, 1) ///< Merge identical constants.
-CODEGENOPT(Mem2Reg , 1, 0) ///< Set when -mem2reg is enabled.
+CODEGENOPT(InfoApp , 1, 0) ///< Set when -infoapp is enabled.
 CODEGENOPT(NoCommon          , 1, 0) ///< Set when -fno-common or C++ is enabled.
 CODEGENOPT(NoDwarf2CFIAsm    , 1, 0) ///< Set when -fno-dwarf2-cfi-asm is enabled.
 CODEGENOPT(NoDwarfDirectoryAsm , 1, 0) ///< Set when -fno-dwarf-directory-asm is

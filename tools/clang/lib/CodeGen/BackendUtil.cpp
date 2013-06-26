@@ -223,7 +223,7 @@ void EmitAssemblyHelper::CreatePasses(TargetMachine *TM) {
                            addThreadSanitizerPass);
   }
 
-  if (CodeGenOpts.Mem2Reg) {
+  if (CodeGenOpts.InfoApp) {
     PMBuilder.addExtension(PassManagerBuilder::EP_OptimizerLast,
                            addInfoAppPass);
     PMBuilder.addExtension(PassManagerBuilder::EP_EnabledOnOptLevel0,

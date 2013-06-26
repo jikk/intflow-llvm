@@ -125,7 +125,7 @@ BENIGN_LANGOPT(IOCImplicitConversionChecks , 1, 0, "runtime checks for lossy imp
 BENIGN_LANGOPT(IOCShiftChecks , 1, 0, "runtime checks for invalid shifts")
 BENIGN_LANGOPT(IOCStrictShiftChecks , 1, 0, "runtime checks for invalid shifts (C99/C++11 rules)")
 BENIGN_LANGOPT(IOCAbortOnError, 1, 0, "abort execution if an IOC check triggers")
-BENIGN_LANGOPT(Mem2Reg, 1, 0, "implement and infoapp pass")
+BENIGN_LANGOPT(InfoApp, 1, 0, "implement and infoapp pass")
 BENIGN_LANGOPT(DumpRecordLayouts , 1, 0, "dumping the layout of IRgen'd records")
 BENIGN_LANGOPT(DumpRecordLayoutsSimple , 1, 0, "dumping the layout of IRgen'd records in a simple form")
 BENIGN_LANGOPT(DumpVTableLayouts , 1, 0, "dumping the layouts of emitted vtables")
