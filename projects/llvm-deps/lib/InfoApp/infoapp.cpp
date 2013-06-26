@@ -66,7 +66,7 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
   
-CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
+//CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
   
 //XXX: same function defined from SourceSinkAnalysis
 static const CallTaintEntry *
@@ -74,8 +74,8 @@ findEntryForFunction(const CallTaintEntry *Summaries,
                      const std::string &FuncName) {
   unsigned Index;
   
-  if (StringRef(FuncName).startswith("__ioc"))
-    return &nothing;
+//  if (StringRef(FuncName).startswith("__ioc"))
+   // return &nothing;
   
   for (Index = 0; Summaries[Index].Name; ++Index) {
     if (Summaries[Index].Name == FuncName)
@@ -513,7 +513,7 @@ INITIALIZE_PASS_BEGIN(InfoApp, "InfoApp", "InfoApp", false, true)
 // INITIALIZE_PASS_DEPENDENCY(LLVMDataStructure);
 // INITIALIZE_PASS_DEPENDENCY(AssistDS);
  INITIALIZE_PASS_DEPENDENCY(PointsToInterface);
- INITIALIZE_PASS_DEPENDENCY(SourceSinkAnalysis);
+// INITIALIZE_PASS_DEPENDENCY(SourceSinkAnalysis);
 // INITIALIZE_PASS_DEPENDENCY(Constraints);
 // INITIALIZE_PASS_DEPENDENCY(Deps);
 

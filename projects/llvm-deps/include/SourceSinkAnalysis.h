@@ -25,12 +25,14 @@ using namespace llvm;
 
 namespace deps {
 
+//using namespace llvm;
+
 class SourceSinkAnalysis : public ModulePass {
 public:
   static char ID;
 
   SourceSinkAnalysis() : ModulePass(ID) {
-   initializeSourceSinkAnalysisPass(*PassRegistry::getPassRegistry());
+//   initializeSourceSinkAnalysisPass(*PassRegistry::getPassRegistry());
   }
 
   void visitCallInst(CallInst &CI);
