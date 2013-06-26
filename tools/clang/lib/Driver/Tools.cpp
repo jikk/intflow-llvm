@@ -6031,7 +6031,7 @@ void linuxtools::Link::ConstructJob(Compilation &C, const JobAction &JA,
   addAsanRTLinux(getToolChain(), Args, CmdArgs);
   addTsanRTLinux(getToolChain(), Args, CmdArgs);
   addIOCRTLinux(getToolChain(), Args, CmdArgs);
-  addMem2RegLinux(getToolChain(), Args, CmdArgs);
+  addInfoAppLinux(getToolChain(), Args, CmdArgs);
 
   if (!Args.hasArg(options::OPT_nostdlib)) {
     if (!Args.hasArg(options::OPT_nodefaultlibs)) {
