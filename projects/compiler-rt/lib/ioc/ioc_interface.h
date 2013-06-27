@@ -18,10 +18,33 @@
 // Other platforms should be easy to add,
 // and probably work as-is.
 #if !defined(__linux__)
-//#error "IOC not supported for this platform!"
+#error "IOC not supported for this platform!"
 #endif
 
 #include <stdint.h>
+
+#define XML_MSG                                     \
+  "<structured_message>\n"                          \
+  "<message_type>found_cwe</message_type>\n"        \
+  "<cwe_entry_id>%s</cwe_entry_id>\n"               \
+  "</structured_message>\n"                         \
+  "<structured_message>\n"                          \
+  "<message_type>controlled_exit</message_type>\n"  \
+  "<test_case>%s</test_case>\n"                     \
+  "</structured_message>\n"                         \
+  "<structured_message>\n"                          \
+  "<message_type>technical_impact</message_type>\n" \
+  "<impact>%s</impact>\n"                           \
+  "<test_case>%s</test_case>\n"                     \
+  "</structured_message>\n"                         \
+  "<!-- error class: %s   -->\n"                    \
+  "<!-- file: %s   -->\n"                           \
+  "<!-- line: %d   -->\n"                           \
+  "<!-- colunm: %d   -->\n"                         \
+  "<!-- value string: %s -->\n"
+
+#define FNAME "/tmp/log.txt"
+
 
 void __ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *expstr,
@@ -52,5 +75,19 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
                              const char *srcty, const char *canonsrcty,
                              const char *dstty, const char *canondstty,
                              uint64_t src, uint8_t is_signed);
+
+typedef struct
+{
+  int quot;           /* Quotient.  */
+  int rem;            /* Remainder.  */
+} div_t;
+
+// div_t   __ioc_div(int numerator, int denominator);
+// ldiv_t  __ioc_ldiv(int numerator, int denominator);
+// lldiv_t __ioc_lldiv(int numerator, int denominator);
+// size_t __ioc_iconv(iconv_t cd,
+//                    char **inbuf, size_t *inbytesleft,
+//                    char **outbuf, size_t *outbytesleft);
+
 
 #endif // _IOC_INTERFACE_H_

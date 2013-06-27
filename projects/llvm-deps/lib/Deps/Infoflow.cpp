@@ -20,6 +20,9 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/CommandLine.h"
 
+#include "llvm/PassSupport.h"
+using namespace deps;
+
 namespace deps {
 
 using namespace llvm;
@@ -42,10 +45,11 @@ char PDTCache::ID = 0;
 static RegisterPass<Infoflow>
 X ("infoflow", "Compute information flow constraints", true, true);
 
-static RegisterPass<PDTCache>
-Y ("pdtcache", "Cache PostDom Analysis Results", true, true);
-  
-Infoflow::Infoflow () : 
+//static RegisterPass<PDTCache>
+//Y ("pdtcache", "Cache PostDom Analysis Results", true, true);
+
+
+Infoflow::Infoflow () :
     CallSensitiveAnalysisPass<Unit,Unit,1,CallerContext>
        (ID, DepsCollapseExtContext, DepsCollapseIndContext),
        kit(new LHConstraintKit()) { }
@@ -1415,5 +1419,30 @@ Infoflow::constrainIntrinsic(const IntrinsicInst & intr, Flows & flows) {
     DEBUG(errs() << "[infoflow]Unsupported intrinsic: type: "<< intr.getIntrinsicID() <<" Name: " << Intrinsic::getName(intr.getIntrinsicID()) << "\n");
   }
 }
-
 }
+
+using namespace deps;
+using namespace llvm;
+
+namespace llvm {
+  void initializePDTCachePass(PassRegistry &Registry);
+  
+  
+  ModulePass *createPDTCachePass() {
+    return new PDTCache();
+  }
+}
+INITIALIZE_PASS_BEGIN(PDTCache, "pdtcache", "Cache PostDom Analysis Results", true, true);
+INITIALIZE_PASS_DEPENDENCY(PostDominatorTree);
+INITIALIZE_PASS_END(PDTCache, "pdtcache", "Cache PostDom Analysis Results", true, true)
+
+//static void* initializePDTCachePassOnce(PassRegistry &Registry) {
+//  PassInfo *PI = new PassInfo("Cache PostDom Analysis Results", "pdtcache", & PDTCache ::ID,
+//                              PassInfo::NormalCtor_t(callDefaultCtor< PDTCache >), true, true);
+//  Registry.registerPass(*PI, true);
+//  return PI;
+//}
+//
+//void llvm::initializePDTCachePass(PassRegistry &Registry) {
+//  CALL_ONCE_INITIALIZATION(initializePDTCachePassOnce)
+//}

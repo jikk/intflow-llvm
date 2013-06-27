@@ -1676,8 +1676,8 @@ ac_compiler_gnu=$ac_cv_c_compiler_gnu
 #LLVM_SRC_ROOT='`(cd ../../; pwd`)'
 #LLVM_OBJ_ROOT="`(cd ../../../ioc-build; pwd)`"
 
-LLVM_SRC_ROOT="/home/tm/ioc-llvm"
-LLVM_OBJ_ROOT="/home/tm/ioc-build"
+LLVM_SRC_ROOT="${HOME}/ioc-llvm"
+LLVM_OBJ_ROOT="${HOME}/ioc-build"
 
 # Check whether --with-llvmsrc was given.
 if test "${with_llvmsrc+set}" = set; then :

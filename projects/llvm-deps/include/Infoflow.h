@@ -55,6 +55,10 @@ class PDTCache : public FPCache<PostDominatorTree> {
 public:
   static char ID;
   PDTCache() : FPCache<PostDominatorTree>(ID) {}
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const {
+    AU.addRequired<PostDominatorTree>();
+    AU.setPreservesAll();
+  }
   virtual const char * getPassName() const { return "PostDom Cache"; }
 };
 
@@ -244,6 +248,7 @@ class Infoflow :
 
     PointsToInterface *pti;
     SourceSinkAnalysis *sourceSinkAnalysis;
+    PDTCache* pdtx;
 
     SignatureRegistrar *signatureRegistrar;
 
@@ -337,6 +342,14 @@ class Infoflow :
     void constrainCallee(const ContextID calleeContext, const Function & callee, const ImmutableCallSite & cs, Flows &);
     void constrainIntrinsic(const IntrinsicInst &, Flows &);
 };
+
+}
+
+namespace llvm {
+  class PassRegistry;
+  class ModulePass;
+  ModulePass *createPDTCachePass();
+  void initializePDTCachePass(llvm::PassRegistry &);
 
 }
 
