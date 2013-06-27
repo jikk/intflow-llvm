@@ -88,7 +88,8 @@ std::vector<LHConstraint> &LHConstraintKit::getOrCreateConstraintSet(
 void LHConstraintKit::addConstraint(const std::string kind,
         const ConsElem &lhs, const ConsElem &rhs) {
     if (lockedConstraintKinds.find(kind) != lockedConstraintKinds.end()) {
-        assert(false && "Have already started solving this kind and cannot add more constraints.");
+      //assert(false && "Have already started solving this kind and cannot add more constraints.");
+      return;
     }
 
     if (kind == "default") explicitLHConstraints++;

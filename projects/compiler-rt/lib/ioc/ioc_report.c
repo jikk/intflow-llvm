@@ -170,7 +170,6 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   char log[256];
   sprintf(log,"[ expr = '%s', lval = %s, rval = %s ]", exprstr, lstr, rstr);
   outputXML((char*) msg, (char*) filename, line, column, log);
-  Exit(-1); 
 #else
  
   fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
