@@ -634,3 +634,37 @@ void
 }
   
 }  //namespace deps
+
+namespace  {
+  /* ID for InfoAppPass */
+  char InfoAppPass::ID = 0;
+  
+  static RegisterPass<InfoAppPass>
+  XX ("infoapp", "implements infoapp", true, true);
+  
+  
+static void initializeInfoAppPasses(PassRegistry &Registry) {
+  llvm::initializePDTCachePass(Registry);
+}
+  
+static void registerInfoAppPasses(const PassManagerBuilder &, PassManagerBase &PM)
+{
+  PM.add(llvm::createPromoteMemoryToRegisterPass());
+  PM.add(llvm::createPDTCachePass());
+  PM.add(new InfoAppPass());
+}
+  
+  static RegisterStandardPasses
+  RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd, registerInfoAppPasses);
+
+class StaticInitializer {
+public:
+  StaticInitializer() {
+    PassRegistry &Registry = *PassRegistry::getPassRegistry();
+    initializeInfoAppPasses(Registry);
+  }
+};
+static StaticInitializer InitializeEverything;
+
+}
+

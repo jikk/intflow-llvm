@@ -5,6 +5,7 @@
 #include "llvm/PassManager.h"
 #include "llvm/Module.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include "Infoflow.h"
@@ -64,20 +65,6 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
-/* ID for InfoAppPass */
-char InfoAppPass::ID = 0;
-
-static void registerInfoAppPass(const PassManagerBuilder &, PassManagerBase &PM)
-{
-    PM.add(new InfoAppPass());
-}
-
-static RegisterStandardPasses
-RegisterInfoAppPass(PassManagerBuilder::EP_OptimizerLast, registerInfoAppPass);
-
-  
-//static RegisterPass<InfoAppPass>
-//XX ("infoapp", "implements infoapp", true, true);
   
 }  // nameapce
 
