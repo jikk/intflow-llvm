@@ -1540,20 +1540,13 @@ static void addIOCRTLinux(const ToolChain &TC, const ArgList &Args,
   CmdArgs.push_back(Args.MakeArgString(LibIOC));
 }
 
-/* FIXME perhaps this needs to be removed completely */
 static void addInfoAppLinux(const ToolChain &TC, const ArgList &Args,
 			ArgStringList &CmdArgs) {
 
-	// If no Mem2Reg flag was given, simply return
-	if (!Args.hasArg(options::OPT_infoapp))
+	if (!Args.hasArg(options::OPT_pinfoapp))
 		return;
-/*
-    SmallString<128> LibInfoApp(TC.getDriver().ResourceDir);
-    llvm::sys::path::append(LibIOC, "lib", "linux",
-                            (Twine("libclang_rt.infopass-") +
-                             TC.getArchName() + ".a"));
-    CmdArgs.push_back(Args.MakeArgString(LibInfoApp));
-*/
+    Args.AddLastArg(CmdArgs, options::OPT_pinfoapp);
+	CmdArgs.push_back("-pinfoapp");
 }
 
 static bool shouldUseFramePointer(const ArgList &Args,

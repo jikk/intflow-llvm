@@ -733,7 +733,7 @@ static void LangOptsToArgs(const LangOptions &Opts, ToArgsList &Res) {
   if (Opts.IOCAbortOnError)
     Res.push_back("-fioc-abort-on-error");
   if (Opts.InfoApp)
-    Res.push_back("-infoapp");
+    Res.push_back("-pinfoapp");
   if (Opts.AddressSanitizer)
     Res.push_back("-faddress-sanitizer");
   if (Opts.ThreadSanitizer)
@@ -2142,7 +2142,7 @@ static void ParseLangArgs(LangOptions &Opts, ArgList &Args, InputKind IK,
   Opts.IOCShiftChecks = Args.hasArg(OPT_fioc_shifts);
   Opts.IOCStrictShiftChecks = Args.hasArg(OPT_fioc_strict_shifts);
   Opts.IOCAbortOnError = Args.hasArg(OPT_fioc_abort_on_error);
-  Opts.InfoApp = Args.hasArg(OPT_infoapp);
+  Opts.InfoApp = Args.hasArg(OPT_pinfoapp);
   Opts.EmitAllDecls = Args.hasArg(OPT_femit_all_decls);
   Opts.PackStruct = Args.getLastArgIntValue(OPT_fpack_struct_EQ, 0, Diags);
   Opts.PICLevel = Args.getLastArgIntValue(OPT_pic_level, 0, Diags);
