@@ -61,7 +61,8 @@ namespace {
   } else if (func->getName() == "__ioc_report_conversion") {
     ;
   } else {
-    assert(! "invalid function name");
+;
+//    assert(! "invalid function name");
   }
 }
 
@@ -224,6 +225,18 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
             
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
@@ -265,6 +278,19 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
+	    
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
           } else if ((func->getName() == "div")   ||
                      (func->getName() == "ldiv")  ||
                      (func->getName() == "lldiv") ||
