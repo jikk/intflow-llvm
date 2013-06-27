@@ -50,7 +50,7 @@ class InfoAppPass : public ModulePass {
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
-    void removeChecksForFunction(Function& F);
+    void removeChecksForFunction(Function& F, Module& M);
     void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
     uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
