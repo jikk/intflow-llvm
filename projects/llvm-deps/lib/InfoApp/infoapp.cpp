@@ -80,7 +80,14 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 
 static const rmChecks rmCheckList[] = {
 //func      file        conv.   overflow  shift
-  {"foo",   "test.c",   true,   true,     true},
+  // wget white-list by jikk
+  {"hash_string_nocase",       "hash.c",          false,   true,     false},
+  {"hash_string",              "hash.c",          false,   true,     false},
+  {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
+  {"critical_factorization",   "str-two-way.h",   false,   true,    false},
+  {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
+
+
   {"bar",   "test.c",   false,  false,    true},
   {0,       0,          false,  false,    false}
 };
@@ -139,10 +146,8 @@ InfoAppPass::runOnModule(Module &M) {
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
-    if (F.getName() == "") {
-      removeChecksForFunction(F, M);
-      continue;
-    }
+    //errs() << "DBG:fname:" << F.getName() << "\n"; 
+    removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
@@ -601,7 +606,7 @@ void
 InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
   for (unsigned i=0; rmCheckList[i].func; i++) {
     if (F.getName() == rmCheckList[i].func) {
-      DEBUG(errs() << F.getName() << "\n");
+      //errs() << "DBG0:"<< F.getName() << ":" << i << "\n";
       for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
         BasicBlock& B = *bi;
         for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -629,7 +634,7 @@ InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
             }
             
             if (rmCheckList[i].conversion) {
-              if((func->getName() == "__ioc_report_add_overflow")) {
+              if((func->getName() == "__ioc_report_conversion")) {
                 xformMap[ci] = true;
 		//benign function. replace it.
             	FunctionType *ftype = func->getFunctionType();
