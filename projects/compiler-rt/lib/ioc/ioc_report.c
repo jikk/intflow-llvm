@@ -12,7 +12,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "ioc_interface.h"
-#include "sanitizer_common/sanitizer_common.h"
 
 #include <stdio.h>
 #include <string.h>

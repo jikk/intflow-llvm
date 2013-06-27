@@ -73,7 +73,7 @@ static void registerInfoAppPass(const PassManagerBuilder &, PassManagerBase &PM)
 }
 
 static RegisterStandardPasses
-RegisterInfoAppPass(PassManagerBuilder::EP_EarlyAsPossible, registerInfoAppPass);
+RegisterInfoAppPass(PassManagerBuilder::EP_OptimizerLast, registerInfoAppPass);
 
   
 //static RegisterPass<InfoAppPass>
