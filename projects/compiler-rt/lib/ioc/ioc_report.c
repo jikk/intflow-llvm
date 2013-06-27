@@ -135,7 +135,6 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
           srcty, canonsrcty, dstty, canondstty);
   
   outputXML(log, (char*) filename, line, column, srcstr);
-  //_exit(-1);
 #else
   fprintf(stderr, "%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
                   " from '%s' (%s) to '%s' (%s)\n",
@@ -171,6 +170,7 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   char log[256];
   sprintf(log,"[ expr = '%s', lval = %s, rval = %s ]", exprstr, lstr, rstr);
   outputXML((char*) msg, (char*) filename, line, column, log);
+  Exit(-1); 
 #else
  
   fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
@@ -179,63 +179,4 @@ void __ioc_report_error(uint32_t line, uint32_t column,
                   exprstr, lstr, rstr);
 #endif
 }
-
-
-/* div_t  __ioc_div(int numerator, int denominator) { */
-/* #ifdef __OUTPUT_XML__ */
-/*   if (denominator == 0) { */
-/*     const char* msg = "div: divsion-by-zero"; */
-/*     char log[256]; */
-/*     sprintf(log, "div: lval %d, rval %d", numerator, denominator); */
-    
-/*     outputXML((char*) msg, (char*) "", 0, 0, log); */
-/*     exit(-1); */
-/*   } */
-/* #else */
-
-/* #endif */
-/*   return div(numerator, numerator); */
-/* } */
-
-/* ldiv_t  __ioc_ldiv(int numerator, int denominator) { */
-/* #ifdef __OUTPUT_XML__ */
-/*   if (denominator == 0) { */
-/*     const char* msg = "ldiv: divsion-by-zero"; */
-/*     char log[256]; */
-/*     sprintf(log, "ldiv: lval %d, rval %d", numerator, denominator); */
-    
-/*     outputXML((char*) msg, (char*) "", 0, 0, log); */
-/*     exit(-1); */
-/*   } */
-/* #else */
-
-/* #endif */
-/*   return ldiv(numerator, numerator); */
-/* } */
-
-/* lldiv_t __ioc_lldiv(int numerator, int denominator) { */
-/* #ifdef __OUTPUT_XML__ */
-/*   if (denominator == 0) { */
-/*     const char* msg = "lldiv: divsion-by-zero"; */
-/*     char log[256]; */
-/*     sprintf(log, "lldiv: lval %d, rval %d", numerator, denominator); */
-    
-/*     outputXML((char*) msg, (char*) "", 0, 0, log); */
-/*     exit(-1); */
-/*   } */
-/* #else */
-
-/* #endif */
-/*   return lldiv(numerator, numerator); */
-/* } */
-
-/* size_t __ioc_iconv(iconv_t cd, */
-/*                    char **inbuf, size_t *inbytesleft, */
-/*                    char **outbuf, size_t *outbytesleft) { */
-/* #ifdef __OUTPUT_XML__ */
-  
-/* #else */
-/* #endif */
-/*   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft); */
-/* } */
 

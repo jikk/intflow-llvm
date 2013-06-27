@@ -2,8 +2,11 @@
 #define INFOAPP_H_
 
 #include "llvm/Pass.h"
+#include "llvm/PassManager.h"
 #include "llvm/Module.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include "Infoflow.h"
 
@@ -13,8 +16,6 @@ using namespace llvm;
 using namespace deps;
 
 namespace  {
-
-
 
 class InfoAppPass : public ModulePass {  
   public:
@@ -64,21 +65,7 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
-/* ID for InfoAppPass */
-char InfoAppPass::ID = 0;
-
-static RegisterPass<InfoAppPass>
-XX ("infoapp", "implements infoapp", true, true);
   
 }  // nameapce
 
-//namespace llvm {
-//  
-//INITIALIZE_PASS_BEGIN(InfoAppPass, "infoapp", "Promote Memory to Register",
-//                      false, false)
-////INITIALIZE_PASS_DEPENDENCY(PromotePass)
-//INITIALIZE_PASS_END(InfoAppPass, "infoapp", "Promote Memory to Register",
-//                    false, false)
-//  
-//}
 #endif

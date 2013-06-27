@@ -44,7 +44,12 @@
 #include "llvm/Support/system_error.h"
 #include <cctype>
 
+<<<<<<< HEAD
 #include <stdio.h>
+=======
+
+//#define __BUILD__
+>>>>>>> jikk-dev
 
 using namespace clang;
 using namespace clang::driver;
@@ -351,12 +356,24 @@ int main(int argc_, const char **argv_) {
                       argv_[1][3] != '1')
       )
   {
+<<<<<<< HEAD
 //     argv_[argc_++] = "-fioc-unsigned";
      argv_[argc_++] = "-fioc-signed";
      argv_[argc_++] = "-fioc-implicit-conversion";
 //     argv_[argc_++] = "-fioc-explicit-conversion";
 //     argv_[argc_++] = "-fioc-shifts";
 //     argv_[argc_++] = "-fioc-strict-shifts";
+=======
+    
+#ifdef __BUILD__
+     //argv_[argc_++] = "-fioc-unsigned";
+     //argv_[argc_++] = "-fioc-signed";
+     //argv_[argc_++] = "-fioc-implicit-conversion";
+     //argv_[argc_++] = "-fioc-explicit-conversion";
+     //argv_[argc_++] = "-fioc-shifts";
+     //argv_[argc_++] = "-fioc-strict-shifts";
+#endif
+>>>>>>> jikk-dev
   }
 
   //  for (int i=0; i < argc_; i++) {
