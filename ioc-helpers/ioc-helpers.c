@@ -118,6 +118,7 @@ int outputXML(char* log,
   fclose(fp);
   exit(-1);
   return 1;
+}
 
 void __ioc___ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,
