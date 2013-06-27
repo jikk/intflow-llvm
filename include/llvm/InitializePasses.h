@@ -267,6 +267,7 @@ void initializeMachineFunctionPrinterPassPass(PassRegistry&);
 void initializeInfoAppPass(PassRegistry&);
 void initializePointsToInterfacePass(PassRegistry&);
 void initializeSourceSinkAnalysisPass(PassRegistry&);
+void initializePDTCachePass(PassRegistry&);
 }
 
 #endif

@@ -54,7 +54,9 @@ public:
 class PDTCache : public FPCache<PostDominatorTree> {
 public:
   static char ID;
-  PDTCache() : FPCache<PostDominatorTree>(ID) {}
+  PDTCache() : FPCache<PostDominatorTree>(ID) {
+  	initializePDTCachePass(*PassRegistry::getPassRegistry());
+  }
   virtual const char * getPassName() const { return "PostDom Cache"; }
 };
 

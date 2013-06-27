@@ -1416,4 +1416,13 @@ Infoflow::constrainIntrinsic(const IntrinsicInst & intr, Flows & flows) {
   }
 }
 
-}
+} //namespace deps
+
+using namespace deps;
+using namespace llvm;
+
+INITIALIZE_PASS_BEGIN(PDTCache, "pdtcache", "Cache PostDom Analysis Results", true, true)
+INITIALIZE_PASS_END(PDTCache, "pdtcache", "Cache PostDom Analysis Results", true, true)
+
+
+
