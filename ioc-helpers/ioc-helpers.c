@@ -1,4 +1,7 @@
 #include "ioc-helpers.h"
+#include <stdio.h>
+
+#define __OUTPUT_XML__
 
 div_t   __ioc_div(int numerator, int denominator) {
 #ifdef __OUTPUT_XML__
