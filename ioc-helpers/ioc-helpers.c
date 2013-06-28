@@ -60,3 +60,94 @@ size_t __ioc_iconv(iconv_t cd,
 #endif
   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
 }
+void __ioc___ioc_report_add_overflow(uint32_t line, uint32_t column,
+                               const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_sub_overflow(uint32_t line, uint32_t column,
+                               const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_mul_overflow(uint32_t line, uint32_t column,
+                               const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_div_error(uint32_t line, uint32_t column,
+                            const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_rem_error(uint32_t line, uint32_t column,
+                            const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_shl_bitwidth(uint32_t line, uint32_t column,
+                               const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_shr_bitwidth(uint32_t line, uint32_t column,
+                               const char *filename, const char *exprstr,
+                               uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_shl_strict(uint32_t line, uint32_t column,
+                            const char *filename, const char *exprstr,
+                             uint64_t lval, uint64_t rval, uint8_t T)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+
+}
+void __ioc___ioc_report_conversion(uint32_t line, uint32_t column,
+                             const char *filename,
+                             const char *srcty, const char *canonsrcty,
+                             const char *dstty, const char *canondstty,
+                             uint64_t src, uint8_t S)
+{
+#ifdef __OUTPUT_XML__
+
+#else
+#endif
+}
