@@ -139,10 +139,7 @@ InfoAppPass::runOnModule(Module &M) {
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
-    if (F.getName() == "") {
-      removeChecksForFunction(F, M);
-      continue;
-    }
+    removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
@@ -629,7 +626,7 @@ InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
             }
             
             if (rmCheckList[i].conversion) {
-              if((func->getName() == "__ioc_report_add_overflow")) {
+              if((func->getName() == "__ioc_report_conversion")) {
                 xformMap[ci] = true;
 		//benign function. replace it.
             	FunctionType *ftype = func->getFunctionType();
