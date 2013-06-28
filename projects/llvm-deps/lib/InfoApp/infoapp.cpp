@@ -61,7 +61,8 @@ namespace {
   } else if (func->getName() == "__ioc_report_conversion") {
     ;
   } else {
-    assert(! "invalid function name");
+;
+//    assert(! "invalid function name");
   }
 }
 
@@ -140,7 +141,7 @@ InfoAppPass::runOnModule(Module &M) {
     Function& F = *mi;
     //XXX: implement something here ..
     if (F.getName() == "") {
-      removeChecksForFunction(F);
+      removeChecksForFunction(F, M);
       continue;
     }
     
@@ -211,7 +212,7 @@ InfoAppPass::runOnModule(Module &M) {
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
             
-            //check for simple const. assignment
+	    //check for simple const. assignment
             //getting valeMap
             std::set<const Value *> vMap;
             soln->getValueMap(vMap);
@@ -225,6 +226,18 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
             
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
@@ -266,6 +279,19 @@ InfoAppPass::runOnModule(Module &M) {
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
+	    
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
           } else if ((func->getName() == "div")   ||
                      (func->getName() == "ldiv")  ||
                      (func->getName() == "lldiv") ||
@@ -573,7 +599,7 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
 }
   
 void
-InfoAppPass::removeChecksForFunction(Function& F) {
+InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
   for (unsigned i=0; rmCheckList[i].func; i++) {
     if (F.getName() == rmCheckList[i].func) {
       DEBUG(errs() << F.getName() << "\n");
@@ -591,12 +617,30 @@ InfoAppPass::removeChecksForFunction(Function& F) {
                  (func->getName() == "__ioc_report_mul_overflow")
                  ) {
                 xformMap[ci] = true;
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
               }
             }
             
             if (rmCheckList[i].conversion) {
               if((func->getName() == "__ioc_report_add_overflow")) {
                 xformMap[ci] = true;
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
               }
             }
 
@@ -606,6 +650,15 @@ InfoAppPass::removeChecksForFunction(Function& F) {
                  (func->getName() == "__ioc_report_shl_strict")
                  ) {
                 xformMap[ci] = true;
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
               }
             }
           }
