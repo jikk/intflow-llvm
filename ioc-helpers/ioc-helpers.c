@@ -92,6 +92,10 @@ int outputXML(char* log,
       return 1;
   }
 
+  if (strcmp(parseFName(fname), "dfa.c") == 0) {
+      return 1;
+  }
+
   const char *entry_id = NULL;
   const char *tc  = NULL;
   const char *impact = NULL;
