@@ -108,9 +108,22 @@ static const rmChecks rmCheckList[] = {
 //Output (06): connect() failed: Network is unreachable
 //Output(08 & 09): job can't be suspended
 //got the same output from /bin/zsh
-
-
-  {"bar",   "test.c",   false,  false,    true},
+  {"re_node_set_add_intersect"  , "regex_internal.c", true  ,   true,   false},
+  {"re_node_set_compare"        , "regex_internal.c", false ,   true,   false},
+  {"re_node_set_merge"          , "regex_internal.c", false ,   true,   false},
+  {"re_string_reconstruct"      , "regex_internal.c", false ,   true,   false},
+  {"cquire_init_state_context"  , "regexec.c"       , false ,   true,   false},
+  {"build_trtable"              , "regexec.c"       , false ,   true,   false},
+  {"dfastate"                   , "dfa.c"           , false ,   true,   false},
+  {"dfaanalyze"                 , "dfa.c"           , false ,   true,   false},
+  {"epsclosure"                 , "dfa.c"           , false ,   true,   false},
+  {"dfaparse"                   , "dfa.c"           , true  ,   false,  false},
+  {"parse_bracket_exp"          , "dfa.c"           , true  ,   false,  false},
+  {"setbit"                     , "dfa.c"           , false ,   false,  true },
+  {"kwsincr"                    , "kwset.c"         , false ,   true,   false},
+  {"kwsexec"                    , "kwset.c"         , true ,   false,   false},
+  {"bmexec"                    , "kwset.c"         , true ,   false,   false},
+  
   {0,       0,          false,  false,    false}
 };
   
