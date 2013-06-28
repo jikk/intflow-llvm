@@ -86,6 +86,28 @@ static const rmChecks rmCheckList[] = {
   {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
   {"critical_factorization",   "str-two-way.h",   false,   true,    false},
   {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
+//tcpdump white-list
+  {"rfc1048_print", 	"print-bootp.c", false, true, false},
+  {"bootp_print", 	"print-bootp.c", false, true, false},
+//bootp_print added because rfc1048_print is static thus inline
+//zsh white-list
+  {"untokenize", "exec.c", true, false, false },
+  {"remnulargs", "glob.c", true, false, false },
+  {"hasher", "hashtable.c", false, true, false },
+  {"exalias", "lex.c", true, false, false },
+  {"add", "lex.c", true, false, false },
+  {"ecgetstr", "parse.c", true, false, false},
+  {"ecstrcode", "parse.c", true, false, false},
+  {"metacharinc", "pattern.c", true, false, false},
+  {"patcompile", "pattern.c", true, false, false},
+  {"has_token", "utils.c", true, false, false},
+  {"mb_metacharlenconv", "utils.c", true, false, false},
+  {"zputs", "utils.c", true, false, false},
+  {"itype_end", "utils.c", true, false, false},
+//can't run good inputs 06, 08 & 09.
+//Output (06): connect() failed: Network is unreachable
+//Output(08 & 09): job can't be suspended
+//got the same output from /bin/zsh
 
 
   {"bar",   "test.c",   false,  false,    true},
