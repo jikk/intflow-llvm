@@ -86,7 +86,25 @@ static const rmChecks rmCheckList[] = {
   {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
   {"critical_factorization",   "str-two-way.h",   false,   true,    false},
   {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
-
+  //NGIN FP START                      file             conv.    overflow  shift
+  {"ngx_hash_key"               , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_key_lc"            , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_strlow"        , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_add_key"           , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_create_pool"            , "ngx_palloc.c"    , false ,   true,   false},
+  {"ngx_strcasecmp"             , "ngx_string.c"    , true  ,   true,   false},
+  {"ngx_strncasecmp"            , "ngx_string.c"    , true  ,   true,   false},
+  {"ngx_event_accept"           , "ngx_event_accept.c"      ,   true,   true,   false},
+  {"ngx_http_log_copy_short"    , "ngx_http_log_module.c"   ,   false,  true,   false},
+  {"ngx_http_log_compile_format", "ngx_http_log_module.c"   ,   false,  true,   false},
+  {"ngx_http_init_phase_handlers","ngx_http.c"              ,   true,   true,   false},
+  {"ngx_http_block",   "ngx_http.c"              ,   true,   true,   false},  /* 'ngx_http_init_phase_handlers' inlined */
+  {"ngx_http_parse_header_line" , "ngx_http_parse.c"        ,   false,  true,   false},
+  {"ngx_atoi" , "ngx_string.c"        ,   false,  true,   false},
+  //CHER FP START
+  {"cherokee_buffer_case_cmp_buf", "buffer.c"       , true ,   true,   false},
+  {"cherokee_buffer_cmp_buf"    , "buffer.c"        , true ,   true,   false},
+  {"rule_cmp"                   , "rule_list.c"     , true  ,   true,   false},
 
   {"bar",   "test.c",   false,  false,    true},
   {0,       0,          false,  false,    false}
