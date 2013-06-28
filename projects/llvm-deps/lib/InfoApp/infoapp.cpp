@@ -81,6 +81,7 @@ static const rmChecks rmCheckList[] = {
 //func      file        conv.   overflow  shift
   {"foo",   "test.c",   true,   true,     true},
   {"bar",   "test.c",   false,  false,    true},
+  {"chrexxx", "buffer.c", false, true, false}
   {0,       0,          false,  false,    false}
 };
   
@@ -108,7 +109,7 @@ InfoAppPass::doInitialization() {
   infoflow = &getAnalysis<Infoflow>();
   DEBUG(errs() << "[InfoApp] doInitialization\n");
 }
-
+  
 void
 InfoAppPass::doFinalization() {
   DEBUG(errs() << "[InfoApp] doFinalization\n");

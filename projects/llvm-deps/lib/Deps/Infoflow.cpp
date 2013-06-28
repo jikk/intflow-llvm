@@ -1427,7 +1427,6 @@ using namespace llvm;
 namespace llvm {
   void initializePDTCachePass(PassRegistry &Registry);
   
-  
   ModulePass *createPDTCachePass() {
     return new PDTCache();
   }
