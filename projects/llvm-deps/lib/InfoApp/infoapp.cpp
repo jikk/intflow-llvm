@@ -202,10 +202,8 @@ InfoAppPass::runOnModule(Module &M) {
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
-<<<<<<< HEAD
-=======
+
     //errs() << "DBG:fname:" << F.getName() << "\n"; 
->>>>>>> symantec
     removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -761,6 +759,7 @@ namespace  {
   
   
 static void initializeInfoAppPasses(PassRegistry &Registry) {
+  llvm::initializeAllocIdentifyPass(Registry);
   llvm::initializePDTCachePass(Registry);
 }
   
@@ -772,7 +771,7 @@ static void registerInfoAppPasses(const PassManagerBuilder &, PassManagerBase &P
 }
   
   static RegisterStandardPasses
-  RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd, registerInfoAppPasses);
+  RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly, registerInfoAppPasses);
 
 class StaticInitializer {
 public:

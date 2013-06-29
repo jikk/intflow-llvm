@@ -194,5 +194,16 @@ void AllocIdentify::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 char AllocIdentify::ID = 0;
-static RegisterPass<AllocIdentify>
-X("alloc-identify", "Identify allocator wrapper functions");
+//static RegisterPass<AllocIdentify>
+//X("alloc-identify", "Identify allocator wrapper functions");
+
+namespace llvm {
+void initializeAllocIdentifyPass(PassRegistry &Registry);
+  
+ModulePass *createAllocIdentifyPass() {
+  return new AllocIdentify();
+}
+}
+INITIALIZE_PASS_BEGIN(AllocIdentify,"alloc-identify", "Identify allocator wrapper functions", false, false);
+INITIALIZE_PASS_DEPENDENCY(LoopInfo);
+INITIALIZE_PASS_END(AllocIdentify, "alloc-identify", "Identify allocator wrapper functions", false, false)

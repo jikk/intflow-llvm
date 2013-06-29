@@ -348,7 +348,11 @@ class Infoflow :
 namespace llvm {
   class PassRegistry;
   class ModulePass;
+
+  ModulePass *createAllocIdentifyPass();
   ModulePass *createPDTCachePass();
+
+  void initializeAllocIdentifyPass(llvm::PassRegistry &);
   void initializePDTCachePass(llvm::PassRegistry &);
 
 }
