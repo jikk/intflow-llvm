@@ -8,7 +8,7 @@
 #===------------------------------------------------------------------------===#
 
 ModuleName := ioc
-SubDirs :=
+SubDirs := 
 
 Sources := $(foreach file,$(wildcard $(Dir)/*.c),$(notdir $(file)))
 ObjNames := $(Sources:%.c=%.o)
@@ -16,3 +16,4 @@ Implementation := Generic
 
 # FIXME: use automatic dependencies?
 Dependencies := $(wildcard $(Dir)/*.h)
+Dependencies += $(wildcard $(Dir)/../sanitizer_common/*.h)

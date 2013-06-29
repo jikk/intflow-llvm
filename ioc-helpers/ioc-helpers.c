@@ -1,7 +1,28 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
 #include "ioc-helpers.h"
 #include <stdio.h>
 
 #define __OUTPUT_XML__
+
+#define __OUTPUT_XML__
+
+char* parseFName(char* fname) {
+  
+  char* s;
+  int i;
+
+  for (i = strlen(fname), s = fname; i ; i--) {
+    if (fname[i] == '/') {
+      s = &fname[i];
+      s++;
+      break;
+    }
+  }
+  return s;
+}
 
 div_t   __ioc_div(int numerator, int denominator) {
 #ifdef __OUTPUT_XML__
@@ -60,6 +81,49 @@ size_t __ioc_iconv(iconv_t cd,
 #endif
   return iconv(cd, inbuf, inbytesleft, outbuf, outbytesleft);
 }
+
+int outputXML(char* log,
+              char* fname,
+              uint32_t line,
+              uint32_t col,
+              char* valStr) {
+
+  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
+      return 1;
+  }
+
+  if (strcmp(parseFName(fname), "dfa.c") == 0) {
+      return 1;
+  }
+
+  const char *entry_id = NULL;
+  const char *tc  = NULL;
+  const char *impact = NULL;
+
+  entry_id = getenv("ENTRY_ID");
+  if (entry_id == NULL)
+    entry_id = (char *) "EID_NEEDED";
+
+  tc = getenv("TESTCASE");
+  if (tc == NULL)
+    tc = (char *) "TESTCASE_NEEDED";
+
+  impact = getenv("IMPACT");
+  if (impact == NULL)
+    impact = (char *) "IMPACT_NEEDED";
+
+  FILE *fp = fopen(FNAME, "w");
+  if (!fp) {
+    perror("Error opening file:");
+    return 0;
+  }
+  fprintf(fp, XML_MSG, entry_id, tc, impact, tc, log,
+          fname, line, col, valStr);
+  fclose(fp);
+  exit(-1);
+  return 1;
+}
+
 void __ioc___ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,
                                uint64_t lval, uint64_t rval, uint8_t T)

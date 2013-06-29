@@ -80,8 +80,71 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 
 static const rmChecks rmCheckList[] = {
 //func      file        conv.   overflow  shift
-  {"foo",   "test.c",   true,   true,     true},
-  {"bar",   "test.c",   false,  false,    true},
+  // wget white-list by jikk
+  {"hash_string_nocase",       "hash.c",          false,   true,     false},
+  {"hash_string",              "hash.c",          false,   true,     false},
+  {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
+  {"critical_factorization",   "str-two-way.h",   false,   true,    false},
+  {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
+
+  //NGIN FP START                      file             conv.    overflow  shift
+  {"ngx_hash_key"               , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_key_lc"            , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_strlow"        , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_hash_add_key"           , "ngx_hash.c"      , false ,   true,   false},
+  {"ngx_create_pool"            , "ngx_palloc.c"    , false ,   true,   false},
+  {"ngx_strcasecmp"             , "ngx_string.c"    , true  ,   true,   false},
+  {"ngx_strncasecmp"            , "ngx_string.c"    , true  ,   true,   false},
+  {"ngx_event_accept"           , "ngx_event_accept.c"      ,   true,   true,   false},
+  {"ngx_http_log_copy_short"    , "ngx_http_log_module.c"   ,   false,  true,   false},
+  {"ngx_http_log_compile_format", "ngx_http_log_module.c"   ,   false,  true,   false},
+  {"ngx_http_init_phase_handlers","ngx_http.c"              ,   true,   true,   false},
+  {"ngx_http_block",   "ngx_http.c"              ,   true,   true,   false},  /* 'ngx_http_init_phase_handlers' inlined */
+  {"ngx_http_parse_header_line" , "ngx_http_parse.c"        ,   false,  true,   false},
+  {"ngx_atoi" , "ngx_string.c"        ,   false,  true,   false},
+  //CHER FP START
+  {"cherokee_buffer_case_cmp_buf", "buffer.c"       , true ,   true,   false},
+  {"cherokee_buffer_cmp_buf"    , "buffer.c"        , true ,   true,   false},
+  {"rule_cmp"                   , "rule_list.c"     , true  ,   true,   false},
+
+//tcpdump white-list
+  {"rfc1048_print", 	"print-bootp.c", false, true, false},
+  {"bootp_print", 	"print-bootp.c", false, true, false},
+//bootp_print added because rfc1048_print is static thus inline
+//zsh white-list
+  {"untokenize", "exec.c", true, false, false },
+  {"remnulargs", "glob.c", true, false, false },
+  {"hasher", "hashtable.c", false, true, false },
+  {"exalias", "lex.c", true, false, false },
+  {"add", "lex.c", true, false, false },
+  {"ecgetstr", "parse.c", true, false, false},
+  {"ecstrcode", "parse.c", true, false, false},
+  {"metacharinc", "pattern.c", true, false, false},
+  {"patcompile", "pattern.c", true, false, false},
+  {"has_token", "utils.c", true, false, false},
+  {"mb_metacharlenconv", "utils.c", true, false, false},
+  {"zputs", "utils.c", true, false, false},
+  {"itype_end", "utils.c", true, false, false},
+//can't run good inputs 06, 08 & 09.
+//Output (06): connect() failed: Network is unreachable
+//Output(08 & 09): job can't be suspended
+//got the same output from /bin/zsh
+  {"re_node_set_add_intersect"  , "regex_internal.c", true  ,   true,   false},
+  {"re_node_set_compare"        , "regex_internal.c", false ,   true,   false},
+  {"re_node_set_merge"          , "regex_internal.c", false ,   true,   false},
+  {"re_string_reconstruct"      , "regex_internal.c", false ,   true,   false},
+  {"cquire_init_state_context"  , "regexec.c"       , false ,   true,   false},
+  {"build_trtable"              , "regexec.c"       , false ,   true,   false},
+  {"dfastate"                   , "dfa.c"           , false ,   true,   false},
+  {"dfaanalyze"                 , "dfa.c"           , false ,   true,   false},
+  {"epsclosure"                 , "dfa.c"           , false ,   true,   false},
+  {"dfaparse"                   , "dfa.c"           , true  ,   false,  false},
+  {"parse_bracket_exp"          , "dfa.c"           , true  ,   false,  false},
+  {"setbit"                     , "dfa.c"           , false ,   false,  true },
+  {"kwsincr"                    , "kwset.c"         , false ,   true,   false},
+  {"kwsexec"                    , "kwset.c"         , true ,   false,   false},
+  {"bmexec"                    , "kwset.c"         , true ,   false,   false},
+  
   {0,       0,          false,  false,    false}
 };
   
@@ -139,6 +202,10 @@ InfoAppPass::runOnModule(Module &M) {
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
+<<<<<<< HEAD
+=======
+    //errs() << "DBG:fname:" << F.getName() << "\n"; 
+>>>>>>> symantec
     removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -598,7 +665,7 @@ void
 InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
   for (unsigned i=0; rmCheckList[i].func; i++) {
     if (F.getName() == rmCheckList[i].func) {
-      DEBUG(errs() << F.getName() << "\n");
+      //errs() << "DBG0:"<< F.getName() << ":" << i << "\n";
       for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
         BasicBlock& B = *bi;
         for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {

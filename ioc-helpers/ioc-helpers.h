@@ -8,6 +8,29 @@ lldiv_t __ioc_lldiv(int numerator, int denominator);
 size_t __ioc_iconv(iconv_t cd,
                    char **inbuf, size_t *inbytesleft,
                    char **outbuf, size_t *outbytesleft);
+
+#define XML_MSG                                     \
+  "<structured_message>\n"                          \
+  "<message_type>found_cwe</message_type>\n"        \
+  "<cwe_entry_id>%s</cwe_entry_id>\n"               \
+  "</structured_message>\n"                         \
+  "<structured_message>\n"                          \
+  "<message_type>controlled_exit</message_type>\n"  \
+  "<test_case>%s</test_case>\n"                     \
+  "</structured_message>\n"                         \
+  "<structured_message>\n"                          \
+  "<message_type>technical_impact</message_type>\n" \
+  "<impact>%s</impact>\n"                           \
+  "<test_case>%s</test_case>\n"                     \
+  "</structured_message>\n"                         \
+  "<!-- error class: %s   -->\n"                    \
+  "<!-- file: %s   -->\n"                           \
+  "<!-- line: %d   -->\n"                           \
+  "<!-- colunm: %d   -->\n"                         \
+  "<!-- value string: %s -->\n"
+
+#define FNAME "/tmp/log.txt"
+
 void __ioc____ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,
                                uint64_t lval, uint64_t rval, uint8_t T);
