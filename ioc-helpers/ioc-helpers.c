@@ -63,7 +63,9 @@ int existsInExclude(char *file, char *name, uint32_t line, uint32_t col) {
         return 1;                                                               
     }                                                                           
   }                                                                             
-                                                                                
+  
+  fclose(fd);
+
   return 0;                                                                     
 }  
 
