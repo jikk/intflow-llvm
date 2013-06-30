@@ -203,7 +203,7 @@ InfoAppPass::runOnModule(Module &M) {
     Function& F = *mi;
     //XXX: implement something here ..
 
-    //errs() << "DBG:fname:" << F.getName() << "\n"; 
+    errs() << "DBG0:fname:" << F.getName() << "\n";
     removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -678,13 +678,13 @@ InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
                  (func->getName() == "__ioc_report_mul_overflow")
                  ) {
                 xformMap[ci] = true;
-		//benign function. replace it.
-            	FunctionType *ftype = func->getFunctionType();
-            	std::string fname = "__ioc_" + std::string(func->getName());
+                //benign function. replace it.
+                FunctionType *ftype = func->getFunctionType();
+                std::string fname = "__ioc_" + std::string(func->getName());
             
-            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-                	                                  ftype,
-                                                          func->getAttributes());
+                Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                                                              ftype,
+                                                              func->getAttributes());
             
             	ci->setCalledFunction(ioc_wrapper);
               }
@@ -770,12 +770,34 @@ static void registerInfoAppPasses(const PassManagerBuilder &, PassManagerBase &P
   PM.add(new InfoAppPass());
 }
   
-  static RegisterStandardPasses
-  RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly, registerInfoAppPasses);
+//static RegisterStandardPasses
+//  RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
+//                      registerInfoAppPasses);
+  
+//static RegisterStandardPasses
+//  RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
+//                      registerInfoAppPasses);
 
+
+  
 class StaticInitializer {
 public:
   StaticInitializer() {
+    char* passend = getenv("__PASSEND__");
+    
+    if (passend) {
+      errs() << "== EP_LoopOptimizerEnd ==\n";
+      RegisterStandardPasses
+      RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
+                        registerInfoAppPasses);
+    } else {
+      errs() << "== EP_ModuleOptimizerEarly\n ==";
+      RegisterStandardPasses
+      RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
+                          registerInfoAppPasses);
+    }
+    
+    
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
     initializeInfoAppPasses(Registry);
   }
