@@ -88,9 +88,10 @@ int outputXML(char* log,
               uint32_t col,
               char* valStr) {
 
-  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
+/*  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
       return 1;
   }
+*/
 
   if (strcmp(parseFName(fname), "dfa.c") == 0) {
       return 1;

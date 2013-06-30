@@ -86,6 +86,7 @@ static const rmChecks rmCheckList[] = {
   {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
   {"critical_factorization",   "str-two-way.h",   false,   true,    false},
   {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
+  {"gethttp", "http.c", false, false, true },
 
   //NGIN FP START                      file             conv.    overflow  shift
   {"ngx_hash_key"               , "ngx_hash.c"      , false ,   true,   false},
@@ -109,22 +110,19 @@ static const rmChecks rmCheckList[] = {
 
 //tcpdump white-list
   {"rfc1048_print", 	"print-bootp.c", false, true, false},
-  {"bootp_print", 	"print-bootp.c", false, true, false},
-//bootp_print added because rfc1048_print is static thus inline
 //zsh white-list
+  {"hasher", "hashtable.c", false, true, false },
+  {"mb_metacharlenconv", "utils.c", true, false, false},
+  {"has_token", "utils.c", true, false, false},
+  {"exalias", "lex.c", true, false, false },
   {"untokenize", "exec.c", true, false, false },
   {"remnulargs", "glob.c", true, false, false },
-  {"hasher", "hashtable.c", false, true, false },
-  {"exalias", "lex.c", true, false, false },
   {"add", "lex.c", true, false, false },
-  {"ecgetstr", "parse.c", true, false, false},
   {"ecstrcode", "parse.c", true, false, false},
-  {"metacharinc", "pattern.c", true, false, false},
-  {"patcompile", "pattern.c", true, false, false},
-  {"has_token", "utils.c", true, false, false},
-  {"mb_metacharlenconv", "utils.c", true, false, false},
-  {"zputs", "utils.c", true, false, false},
   {"itype_end", "utils.c", true, false, false},
+  {"ecgetstr", "parse.c", true, false, false},
+  {"patcompile", "pattern.c", true, false, false},
+  {"metacharinc", "pattern.c", true, false, false},
 //can't run good inputs 06, 08 & 09.
 //Output (06): connect() failed: Network is unreachable
 //Output(08 & 09): job can't be suspended
@@ -145,6 +143,18 @@ static const rmChecks rmCheckList[] = {
   {"kwsexec"                    , "kwset.c"         , true ,   false,   false},
   {"bmexec"                    , "kwset.c"         , true ,   false,   false},
   
+  {"cherokee_plugin_post_track_init", "post_track.c",true, true, true},
+  {"ret_t entry_new", "post_track.c",true, true, true},
+  {"entry_free", "post_track.c",true, true, true},
+  {"_free", "post_track.c",true, true, true},
+  {"_figure_x_progress_id", "post_track.c",true, true, true},
+  {"_purge_unreg", "post_track.c",true, true, true},
+  {"_register", "post_track.c",true, true, true},
+  {"_unregister", "post_track.c",true, true, true},
+  {"cherokee_generic_post_track_free", "post_track.c",true, true, true},
+  {"cherokee_generic_post_track_configure", "post_track.c",true, true, true},
+  {"cherokee_generic_post_track_new", "post_track.c",true, true, true},
+  {"cherokee_generic_post_track_get", "post_track.c",true, true, true},
   {0,       0,          false,  false,    false}
 };
   
