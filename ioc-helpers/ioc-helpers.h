@@ -30,6 +30,7 @@ size_t __ioc_iconv(iconv_t cd,
   "<!-- value string: %s -->\n"
 
 #define FNAME "/tmp/log.txt"
+#define EXCLUDE_FNAME "exclude.files"
 
 void __ioc____ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,

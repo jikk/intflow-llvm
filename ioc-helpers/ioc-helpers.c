@@ -9,10 +9,15 @@
 
 #define __OUTPUT_XML__
 
+//Does not work properly when user accidentally passes "file/"
+//as the name of the file
 char* parseFName(char* fname) {
   
-  char* s;
+  char *s;
   int i;
+
+  if (!fname)
+	  return NULL;
 
   for (i = strlen(fname), s = fname; i ; i--) {
     if (fname[i] == '/') {
@@ -23,6 +28,44 @@ char* parseFName(char* fname) {
   }
   return s;
 }
+
+
+//Returns 1 if the triple ('name', 'line', 'col') exists in file 'file'
+//Ignores 'line' and 'col' if both are 0
+int existsInExclude(char *file, char *name, uint32_t line, uint32_t col) {         
+                                                                                
+  char line_buffer[BUFSIZ];                                                     
+  char fname[BUFSIZ];                                                           
+  uint32_t fline, fcol;                                                         
+  uint8_t ignores_lines;                                                        
+  FILE *fd;                                                                     
+  int i;                                                                        
+                                                                                
+  fd = fopen(file, "r");                                                        
+  if (!fd) {                                                                    
+    perror("Error opening file:");                                              
+    return 0;                                                                   
+  }                                                                             
+                                                                                
+  //if 0 0 is passed ignore line and col                                           
+  ignores_lines = !(line || col);                                               
+                                                                                
+  if (ignores_lines) {                                                          
+    while (fgets(line_buffer, sizeof(line_buffer), fd)) {                       
+      sscanf(line_buffer, "%s", fname);                                         
+      if (strcmp(parseFName(fname), name) == 0)                                 
+        return 1;                                                               
+    }                                                                           
+  } else {                                                                      
+    while (fgets(line_buffer, sizeof(line_buffer), fd)) {                       
+      sscanf(line_buffer, "%s %d %d", fname, &fline, &fcol);                    
+      if (strcmp(parseFName(fname), name) == 0 && fline == line && fcol == col) 
+        return 1;                                                               
+    }                                                                           
+  }                                                                             
+                                                                                
+  return 0;                                                                     
+}  
 
 div_t   __ioc_div(int numerator, int denominator) {
 #ifdef __OUTPUT_XML__
@@ -88,13 +131,9 @@ int outputXML(char* log,
               uint32_t col,
               char* valStr) {
 
-  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
-      return 1;
-  }
-
-  if (strcmp(parseFName(fname), "dfa.c") == 0) {
-      return 1;
-  }
+  //check if exclude this file from our rule set 
+  if ( fname && existsInExclude(EXCLUDE_FNAME, fname, line, col))
+	  return 1;
 
   const char *entry_id = NULL;
   const char *tc  = NULL;
