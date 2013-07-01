@@ -44,28 +44,23 @@ int existsInExclude(char *file, char *name, uint32_t line, uint32_t col) {
     return 0;
   }
 
-  //if 0 0 is passed ignore line and col
-  ignores_lines = !(line || col);
-  if (ignores_lines) {
-    while (fgets(line_buffer, sizeof(line_buffer), fd)) {
-      sscanf(line_buffer, "%s", fname);
-      if (strcmp(parseFName(name), fname) == 0){
-	fclose(fd);
-        return 1;
-      }
-    }
-  } else {
-    while (fgets(line_buffer, sizeof(line_buffer), fd)) {
-      sscanf(line_buffer, "%s %d %d", fname, &fline, &fcol);
-      if (strcmp(parseFName(name), fname) == 0 && fline == line && fcol == col){
-	fclose(fd);
-        return 1;
-      }
-    }
+	while (fgets(line_buffer, sizeof(line_buffer), fd)) {
+		sscanf(line_buffer, "%s %d %d", fname, &fline, &fcol);
+		// just check the name if line and col are 0
+		if (!(fline || fcol)) {
+				if (strcmp(parseFName(name), fname) == 0){
+						fclose(fd);
+						return 1;
+				}
+		} else {
+				if (strcmp(parseFName(name), fname) == 0 && fline == line && fcol == col){
+						fclose(fd);
+						return 1;
+				}
+		}
   }
 
   fclose(fd);
-
   return 0;
 }
 
@@ -133,25 +128,7 @@ int outputXML(char* log,
               uint32_t col,
               char* valStr) {
 
-/*  if (strcmp(parseFName(fname), "HTInet.c") == 0) {
-      return 1;
-  }
-*/
-
-  if (strcmp(parseFName(fname), "dfa.c") == 0) {
-      return 1;
-  }
-
-  //regexec line 1082 col 57
-  if (strcmp(parseFName(fname), "regexec.c") == 0) {
-      return 1;
-  }
-
-  if (strcmp(parseFName(fname), "dfa.c") == 0) {
-      return 1;
-  }
- 
-//check if exclude this file from our rule set
+	//check if exclude this file from our rule set
   if (fname && existsInExclude(EXCLUDE_FNAME, fname, line, col))
 	  return 1;
 
