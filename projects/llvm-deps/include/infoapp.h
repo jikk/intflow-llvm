@@ -12,6 +12,8 @@
 
 #include <set>
 
+#define WHITE_LIST "/opt/stonesoup/etc/whitelist.files"
+
 using namespace llvm;
 using namespace deps;
 
@@ -54,12 +56,12 @@ class InfoAppPass : public ModulePass {
     void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
     uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
-  void getStringFromVal(Value* val, std::string& output);
+    void getStringFromVal(Value* val, std::string& output);
 };  //class
   
 typedef  struct {
-  const char* func;
-  const char* fname;
+  char* func;
+  char* fname;
   bool conversion;
   bool overflow;
   bool shift;

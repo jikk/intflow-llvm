@@ -1,4 +1,6 @@
 #include <sstream>
+#include <fstream>
+#include <string>
 
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
@@ -21,6 +23,8 @@ using std::set;
 
 using namespace llvm;
 using namespace deps;
+
+static void getWhiteList();
 
 namespace {
 
@@ -78,85 +82,7 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
 
-static const rmChecks rmCheckList[] = {
-//func      file        conv.   overflow  shift
-  // wget white-list by jikk
-  {"hash_string_nocase",       "hash.c",          false,   true,     false},
-  {"hash_string",              "hash.c",          false,   true,     false},
-  {"two_way_short_needle",     "str-two-way.h",   false,   true,     false},
-  {"critical_factorization",   "str-two-way.h",   false,   true,    false},
-  {"rpl_strcasestr",           "str-two-way.h",   false,   true,     false},
-  {"gethttp", "http.c", false, false, true },
-
-  //NGIN FP START                      file             conv.    overflow  shift
-  {"ngx_hash_key"               , "ngx_hash.c"      , false ,   true,   false},
-  {"ngx_hash_key_lc"            , "ngx_hash.c"      , false ,   true,   false},
-  {"ngx_hash_strlow"        , "ngx_hash.c"      , false ,   true,   false},
-  {"ngx_hash_add_key"           , "ngx_hash.c"      , false ,   true,   false},
-  {"ngx_create_pool"            , "ngx_palloc.c"    , false ,   true,   false},
-  {"ngx_strcasecmp"             , "ngx_string.c"    , true  ,   true,   false},
-  {"ngx_strncasecmp"            , "ngx_string.c"    , true  ,   true,   false},
-  {"ngx_event_accept"           , "ngx_event_accept.c"      ,   true,   true,   false},
-  {"ngx_http_log_copy_short"    , "ngx_http_log_module.c"   ,   false,  true,   false},
-  {"ngx_http_log_compile_format", "ngx_http_log_module.c"   ,   false,  true,   false},
-  {"ngx_http_init_phase_handlers","ngx_http.c"              ,   true,   true,   false},
-  {"ngx_http_block",   "ngx_http.c"              ,   true,   true,   false},  /* 'ngx_http_init_phase_handlers' inlined */
-  {"ngx_http_parse_header_line" , "ngx_http_parse.c"        ,   false,  true,   false},
-  {"ngx_atoi" , "ngx_string.c"        ,   false,  true,   false},
-  //CHER FP START
-  {"cherokee_buffer_case_cmp_buf", "buffer.c"       , true ,   true,   false},
-  {"cherokee_buffer_cmp_buf"    , "buffer.c"        , true ,   true,   false},
-  {"rule_cmp"                   , "rule_list.c"     , true  ,   true,   false},
-
-//tcpdump white-list
-  {"rfc1048_print", 	"print-bootp.c", false, true, false},
-//zsh white-list
-  {"hasher", "hashtable.c", false, true, false },
-  {"mb_metacharlenconv", "utils.c", true, false, false},
-  {"has_token", "utils.c", true, false, false},
-  {"exalias", "lex.c", true, false, false },
-  {"untokenize", "exec.c", true, false, false },
-  {"remnulargs", "glob.c", true, false, false },
-  {"add", "lex.c", true, false, false },
-  {"ecstrcode", "parse.c", true, false, false},
-  {"itype_end", "utils.c", true, false, false},
-  {"ecgetstr", "parse.c", true, false, false},
-  {"patcompile", "pattern.c", true, false, false},
-  {"metacharinc", "pattern.c", true, false, false},
-//can't run good inputs 06, 08 & 09.
-//Output (06): connect() failed: Network is unreachable
-//Output(08 & 09): job can't be suspended
-//got the same output from /bin/zsh
-  {"re_node_set_add_intersect"  , "regex_internal.c", true  ,   true,   false},
-  {"re_node_set_compare"        , "regex_internal.c", false ,   true,   false},
-  {"re_node_set_merge"          , "regex_internal.c", false ,   true,   false},
-  {"re_string_reconstruct"      , "regex_internal.c", false ,   true,   false},
-  {"cquire_init_state_context"  , "regexec.c"       , false ,   true,   false},
-  {"build_trtable"              , "regexec.c"       , false ,   true,   false},
-  {"dfastate"                   , "dfa.c"           , false ,   true,   false},
-  {"dfaanalyze"                 , "dfa.c"           , false ,   true,   false},
-  {"epsclosure"                 , "dfa.c"           , false ,   true,   false},
-  {"dfaparse"                   , "dfa.c"           , true  ,   false,  false},
-  {"parse_bracket_exp"          , "dfa.c"           , true  ,   false,  false},
-  {"setbit"                     , "dfa.c"           , false ,   false,  true },
-  {"kwsincr"                    , "kwset.c"         , false ,   true,   false},
-  {"kwsexec"                    , "kwset.c"         , true ,   false,   false},
-  {"bmexec"                    , "kwset.c"         , true ,   false,   false},
-  
-  {"cherokee_plugin_post_track_init", "post_track.c",true, true, true},
-  {"ret_t entry_new", "post_track.c",true, true, true},
-  {"entry_free", "post_track.c",true, true, true},
-  {"_free", "post_track.c",true, true, true},
-  {"_figure_x_progress_id", "post_track.c",true, true, true},
-  {"_purge_unreg", "post_track.c",true, true, true},
-  {"_register", "post_track.c",true, true, true},
-  {"_unregister", "post_track.c",true, true, true},
-  {"cherokee_generic_post_track_free", "post_track.c",true, true, true},
-  {"cherokee_generic_post_track_configure", "post_track.c",true, true, true},
-  {"cherokee_generic_post_track_new", "post_track.c",true, true, true},
-  {"cherokee_generic_post_track_get", "post_track.c",true, true, true},
-  {0,       0,          false,  false,    false}
-};
+static rmChecks *rmCheckList;
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
   
@@ -179,6 +105,7 @@ findEntryForFunction(const CallTaintEntry *Summaries,
   
 void
 InfoAppPass::doInitialization() {
+  getWhiteList();
   infoflow = &getAnalysis<Infoflow>();
   DEBUG(errs() << "[InfoApp] doInitialization\n");
 }
@@ -200,6 +127,11 @@ InfoAppPass::doFinalization() {
     errs() << rs.str();
     errs() << "\n";
   }
+  for (unsigned i=0; rmCheckList[i].func; i++) {
+    delete rmCheckList[i].func;
+    delete rmCheckList[i].fname;
+  }
+  delete rmCheckList;
 }
 
 bool
@@ -816,3 +748,80 @@ static StaticInitializer InitializeEverything;
 
 }
 
+using namespace std;
+
+static void
+getWhiteList() {
+  string line, file, function, conv;
+  string overflow, shift;
+  bool conv_bool, overflow_bool, shift_bool;
+  unsigned numLines;
+  unsigned i;
+  unsigned pos = 0;
+  ifstream whitelistFile;
+  whitelistFile.open(WHITE_LIST);
+  //get number of lines
+  numLines = 0;
+  while (whitelistFile.good()) {
+    getline(whitelistFile, line);
+    if (!line.empty())
+      numLines++;
+  }
+
+  whitelistFile.clear();
+  whitelistFile.seekg(0, ios::beg);
+
+  rmCheckList = new rmChecks[numLines];
+  for (i = 0; i < numLines; i++) {
+    getline(whitelistFile, line);
+    //handle each line
+    pos = 0;
+    function = line.substr(pos, line.find(","));
+    pos = line.find(",") + 1;
+    file = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    conv = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    overflow = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    shift = line.substr(pos, line.size() - pos);
+
+    if (conv.compare("true") == 0)
+      conv_bool = true;
+    else
+      conv_bool = false;
+
+    if (overflow.compare("true") == 0)
+      overflow_bool = true;
+    else
+      overflow_bool = false;
+
+    if (shift.compare("true") == 0)
+      shift_bool = true;
+    else
+      shift_bool = false;
+
+    if (function.compare("0") == 0)
+      rmCheckList[i].func = (char*) 0;
+    else {
+      rmCheckList[i].func = new char[strlen(function.c_str())+1];
+      for (unsigned j = 0; j < strlen(function.c_str()); j++)
+        rmCheckList[i].func[j] = function[j];
+      rmCheckList[i].func[strlen(function.c_str())] = '\0';
+    }
+    if (file.compare("0") == 0)
+      rmCheckList[i].fname =  (char *) 0;
+    else {
+      rmCheckList[i].fname = new char[strlen(file.c_str()) +1];
+      for (unsigned j = 0; j < strlen(file.c_str()); j++)
+        rmCheckList[i].fname[j] = file[j];
+      rmCheckList[i].fname[strlen(file.c_str())] = '\0';
+
+    }
+    rmCheckList[i].conversion = conv_bool;
+    rmCheckList[i].overflow = overflow_bool;
+    rmCheckList[i].shift = shift_bool;
+
+  }
+  whitelistFile.close();
+}
