@@ -15,6 +15,18 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <limits.h>
+
+#define __OUTPUT_XML__
+
+#ifdef __OUTPUT_XML__
+int outputXML(char* log,
+              char* fname,
+              uint32_t line,
+              uint32_t col,
+              char* valStr);
+#endif
 
 // Shared helper for reporting failed checks
 void __ioc_report_error(uint32_t line, uint32_t column,
@@ -117,10 +129,19 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
     sprintf(srcstr, "%lld", (signed long long)src);
   else
     sprintf(srcstr, "%llu", (unsigned long long)src);
-  fprintf(stderr, "%s:%d:%d: runtime error: value lost in conversion of '%s'"
+
+#ifdef __OUTPUT_XML__
+  char log[256];
+  sprintf(log, "conversion error from %s (%s) to %s (%s)",
+          srcty, canonsrcty, dstty, canondstty);
+  
+  outputXML(log, (char*) filename, line, column, srcstr);
+#else
+  fprintf(stderr, "%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
                   " from '%s' (%s) to '%s' (%s)\n",
                   filename, line, column, srcstr,
                   srcty, canonsrcty, dstty, canondstty);
+#endif
 }
 
 // Handling of encoded types:
@@ -146,8 +167,62 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   __ioc_print_val(lstr, lval, LT);
   __ioc_print_val(rstr, rval, RT);
 
-  fprintf(stderr, "%s:%d:%d: runtime error: %s "
+#ifdef __OUTPUT_XML__
+  char log[256];
+  sprintf(log,"[ expr = '%s', lval = %s, rval = %s ]", exprstr, lstr, rstr);
+  outputXML((char*) msg, (char*) filename, line, column, log);
+#else
+ 
+  fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
                   "[ expr = '%s', lval = %s, rval = %s ]\n",
                   filename, line, column, msg,
                   exprstr, lstr, rstr);
+#endif
+}
+
+
+
+/* Returns: a * b */
+
+/* Effects: sets *overflow to 1  if a * b overflows */
+
+typedef long long di_int;
+
+di_int
+__mulodi4(di_int a, di_int b, int* overflow)
+{
+  const int N = (int)(sizeof(di_int) * CHAR_BIT);
+  const di_int MIN = (di_int)1 << (N-1);
+  const di_int MAX = ~MIN;
+  *overflow = 0;
+  di_int result = a * b;
+  if (a == MIN)
+    {
+      if (b != 0 && b != 1)
+        *overflow = 1;
+      return result;
+    }
+  if (b == MIN)
+    {
+      if (a != 0 && a != 1)
+        *overflow = 1;
+      return result;
+    }
+  di_int sa = a >> (N - 1);
+  di_int abs_a = (a ^ sa) - sa;
+  di_int sb = b >> (N - 1);
+  di_int abs_b = (b ^ sb) - sb;
+  if (abs_a < 2 || abs_b < 2)
+    return result;
+  if (sa == sb)
+    {
+      if (abs_a > MAX / abs_b)
+        *overflow = 1;
+    }
+  else
+    {
+      if (abs_a > MIN / -abs_b)
+        *overflow = 1;
+    }
+  return result;
 }

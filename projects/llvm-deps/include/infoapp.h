@@ -2,16 +2,22 @@
 #define INFOAPP_H_
 
 #include "llvm/Pass.h"
+#include "llvm/PassManager.h"
 #include "llvm/Module.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include "Infoflow.h"
 
 #include <set>
 
-namespace deps {
+#define WHITE_LIST "/opt/stonesoup/etc/whitelist.files"
 
 using namespace llvm;
+using namespace deps;
+
+namespace  {
 
 class InfoAppPass : public ModulePass {  
   public:
@@ -46,16 +52,22 @@ class InfoAppPass : public ModulePass {
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
+    void removeChecksForFunction(Function& F, Module& M);
+    void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
+    uint64_t getIntFromVal(Value* val);
+    uint64_t getColFromVal(Value* val);
+    void getStringFromVal(Value* val, std::string& output);
+};  //class
+  
+typedef  struct {
+  char* func;
+  char* fname;
+  bool conversion;
+  bool overflow;
+  bool shift;
+} rmChecks;
 
   
-};  //class
-
-/* ID for InfoAppPass */
-char InfoAppPass::ID = 99;
-
-static RegisterPass<InfoAppPass>
-XX ("infoapp", "implements infoapp", true, true);
-
 }  // nameapce
 
 #endif

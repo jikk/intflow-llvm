@@ -1,0 +1,45 @@
+PHASE1: Build ioc-llvm
+
+1. cd ~/
+2. git clone https://github.com/jikk/ioc-llvm.git ioc-llvm (You need a permission to clone it)
+3. git checkout symantec   #checkout to the symantec branch
+4. export LLVM_SRC=”~/ioc-llvm”
+5. sudo apt-get update
+6. sudo apt-get instal; g++-4.5
+7. sudo apt-get install autoconf
+8. mkdir ~/ioc-build
+9. cd ~/ioc-build
+10. CC=gcc CXX=g++ ../ioc-llvm/configure --enable-optimized
+11. make (depending on the machine, run ‘make -j2’ or  ‘make -j4’ etc) 
+12. build/add wrapper objects
+    $cd ~/ioc-llvm/ioc-helpers
+    $make
+    $ar rs ~/ioc-build/Release+Asserts/lib/clang/3.2/lib/linux/libclang_rt.ioc-i386.a ~/ioc-llvm/ioc-helpers/ioc-helpers.o
+
+13. Copy ~/ioc-llvm/ioc-helpers/whitelist.files and ~/ioc-llvm/ioc-helpers/exclude.files to /opt/stonesoup/etc/
+
+
+PHASE 2:  Build test cases
+
+edit .profile and add the following
+export SS_CC="${HOME}/ioc-build/Debug+Asserts/bin/clang   -O3 -fioc-explicit-conversion -fioc-implicit-conversion -fioc-unsigned -fioc-signed -fioc-shifts -fioc-strict-shifts \
+-Xclang -load  -Xclang ${HOME}/ioc-build/projects/poolalloc/Debug+Asserts/lib/LLVMDataStructure.so  \
+-Xclang -load  -Xclang  ${HOME}/ioc-build/projects/poolalloc/Debug+Asserts/lib/AssistDS.so \
+-Xclang -load   -Xclang  ${HOME}/ioc-build/projects/llvm-deps/Debug+Asserts/lib/pointstointerface.so     \
+-Xclang -load  -Xclang  ${HOME}/ioc-build/projects/llvm-deps/Debug+Asserts/lib/sourcesinkanalysis.so  \
+-Xclang -load  -Xclang  ${HOME}/ioc-build/projects/llvm-deps/Debug+Asserts/lib/Constraints.so   \
+-Xclang  -load  -Xclang  ${HOME}/ioc-build/projects/llvm-deps/Debug+Asserts/lib/Deps.so   \
+ -Xclang -load -Xclang  ${HOME}/ioc-build/projects/llvm-deps/Debug+Asserts/lib/InfoApp.so"
+
+export SS_LNK="${HOME}/ioc-build/Debug+Asserts/bin/clang   -O3 -fioc-explicit-conversion -fioc-implicit-conversion -fioc-unsigned -fioc-signed -fioc-shifts -fioc-strict-shifts"
+
+PHASE 3:  Special make command after configure is complete for NGINX and CHER.
+
+For NGINX, run
+make install  CC="__PASSEND__=1 $SS_CC" LINK="$SS_LNK"
+
+if you get undefined errors for the MD5__xx family, include the ssl library:
+    …..    LINK="$SS_LNK -lssl"
+
+For CHER:
+make install CC="__PASSEND__=1 $SS_CC -std=gnu99" CCLD="$SS_LNK"

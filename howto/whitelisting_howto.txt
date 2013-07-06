@@ -1,0 +1,68 @@
+[White-listing tutorial]
+
+We have two different approaches for white-listing i) function name based
+approach and ii) location(file name, line, and column) based approach. 
+You can edit whitelist.files(function name based white-listing) and
+exclude.files(location based white-listing) to employ these approaches.
+
+Both files should be located under '/opt/stonesoup/etc/
+
+
+== White-listing by location with "exclude.files" ==
+
+1. Edit exculde.files
+
+This file contains information for ioc-helpers. All entries inside the file will
+be overlooked by InfoApp pass. Each entry is of the form:
+
+<filename> <line> <col>
+
+*ATTENTION* 
+- There should be *a* whitespace between each name.
+- If both line and column are 0, then all errors occurring from that file are
+ignored, and in this case, only the filename is checked.
+
+Example entry:
+
+dfa.c 2735 30
+HTInet.c 0 0
+regexec.c 1082 57
+
+2. Re-run the TC
+ - This doesn't require re-compilation of the source.
+
+
+== White-listing by function name with "whitelist.files" == 
+
+1.  Edit whitelist.files
+
+The file whitelist.files, contains the functions to be whitelisted. Each entry
+is of the form,
+
+<function>,<file>,<is_conversion>,<is_overflow>,<is_shift>
+
+- <function> is the function in which the error appears
+- <file> is the name of the file containing <function> (without the full path,
+  e.x. for /src/regex.c file is regex.c)
+- <is_conversion> is either ‘true’ or ‘false’, depending on the type of the
+  error(true for conv. errors)
+- <is_overflow> is either ‘true’ or ‘false’
+- <is_shift> is either ‘true’ or ‘false’ 
+
+Example file:
+  wsincr,kwset.c,false,true,false
+  cherokee_plugin_post_track_init,post_track.c,true,true,true
+  ret_tentry_new,post_track.c,true,true,true
+  _unregister,post_track.c,true,true,true
+  cherokee_generic_post_track_free,post_track.c,true,true,true
+  0,0,false,false,false
+
+*ATTENTION*
+- There should be *NO* whitespaces between the commas.
+- Last entry of the file should always be 
+	0,0,false,false,false
+
+2. Rebuild the sources
+
+3. Re-run the TC
+

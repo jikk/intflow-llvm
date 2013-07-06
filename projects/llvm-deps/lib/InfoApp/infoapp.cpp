@@ -1,10 +1,13 @@
 #include <sstream>
+#include <fstream>
+#include <string>
 
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Transforms/Utils/BasicBlockUtils.h"
 
 #include "Infoflow.h"
 #include "Slice.h"
@@ -12,45 +15,58 @@
 #include "infoapp.h"
 //#define __REACH__
 
+//#define __DBG__
+#define DBG_LINE 322
+#define DBG_COL 23
+
 using std::set;
 
-namespace deps {
-
 using namespace llvm;
-  
-  static void format_ioc_report_func(const Value* val, raw_string_ostream& rs) {
+using namespace deps;
+
+static void getWhiteList();
+
+namespace {
+
+  void
+  InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
+  {
   
   const CallInst* ci = dyn_cast<CallInst>(val);
   assert(ci && "CallInst casting check");
+
   const Function* func = ci->getCalledFunction();
-  assert(ci && "Function casting check");
+  assert(func && "Function casting check");
   
   //line & column
-  ConstantInt* line = dyn_cast<ConstantInt>(ci->getOperand(0));
-  assert(line && "constant int casting check");
-  
-  ConstantInt* col = dyn_cast<ConstantInt>(ci->getOperand(1));
-  assert(col && "constant int casting check");
+  uint64_t line = getIntFromVal(ci->getOperand(0));
+  uint64_t col = getIntFromVal(ci->getOperand(1));
 
-  rs << func->getName().str();
-
-  // XXX: how can i output char string?
-  //ci->getOperand(2)->print(rs);
-  rs << " (line ";
-  rs << line->getZExtValue();
-  rs << ", col ";
-  rs << col->getZExtValue() << ")";
+  //XXX: restructure
+  std::string fname = "";
+  getStringFromVal(ci->getOperand(2), fname);
     
+  rs << func->getName().str() << ":";
+  rs << fname << ":" ;
+  rs << " (line ";
+  rs << line;
+  rs << ", col ";
+  rs << col << ")";
 
+  //ioc_report_* specific items
   if (func->getName() == "__ioc_report_add_overflow" ||
       func->getName() == "__ioc_report_sub_overflow" ||
-      func->getName() == "__ioc_report_mul_overflow")
+      func->getName() == "__ioc_report_mul_overflow" ||
+      func->getName() == "__ioc_report_shr_bitwidth" ||
+      func->getName() == "__ioc_report_shl_bitwidth" ||
+      func->getName() == "__ioc_report_shl_strict")
   {
     ;
   } else if (func->getName() == "__ioc_report_conversion") {
     ;
   } else {
-    assert(! "invalid function name");
+;
+//    assert(! "invalid function name");
   }
 }
 
@@ -65,6 +81,8 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   { "gettimeofday",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
   { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
+
+static rmChecks *rmCheckList;
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
   
@@ -87,10 +105,11 @@ findEntryForFunction(const CallTaintEntry *Summaries,
   
 void
 InfoAppPass::doInitialization() {
+  getWhiteList();
   infoflow = &getAnalysis<Infoflow>();
   DEBUG(errs() << "[InfoApp] doInitialization\n");
 }
-
+  
 void
 InfoAppPass::doFinalization() {
   DEBUG(errs() << "[InfoApp] doFinalization\n");
@@ -108,6 +127,11 @@ InfoAppPass::doFinalization() {
     errs() << rs.str();
     errs() << "\n";
   }
+  for (unsigned i=0; rmCheckList[i].func; i++) {
+    delete rmCheckList[i].func;
+    delete rmCheckList[i].fname;
+  }
+  delete rmCheckList;
 }
 
 bool
@@ -120,10 +144,9 @@ InfoAppPass::runOnModule(Module &M) {
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
-    if (F.getName() == "") {
-      //removeChecksForFunction(F);
-      continue;
-    }
+
+    errs() << "DBG0:fname:" << F.getName() << "\n";
+    removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
@@ -147,7 +170,6 @@ InfoAppPass::runOnModule(Module &M) {
            __ioc_report_div_error()
            __ioc_report_rem_error()
            __ioc_report_shl_bitwidth()
-           __ioc_report_shr_bitwidth()
            __ioc_report_shl_strict()
            */
           
@@ -157,8 +179,19 @@ InfoAppPass::runOnModule(Module &M) {
           
           if (func->getName() == "__ioc_report_add_overflow" ||
               func->getName() == "__ioc_report_sub_overflow" ||
-              func->getName() == "__ioc_report_mul_overflow")
+              func->getName() == "__ioc_report_mul_overflow" ||
+              func->getName() == "__ioc_report_shr_bitwidth" ||
+              func->getName() == "__ioc_report_shl_bitwidth" ||
+              func->getName() == "__ioc_report_shl_strict")
           {
+#ifdef __DBG__
+            uint32_t line = getIntFromVal(ci->getOperand(0));
+            uint32_t col  = getIntFromVal(ci->getOperand(1));
+            
+            if (line != DBG_LINE || col != DBG_COL)
+              continue;
+#endif
+            
             //check for arg. count
             assert(ci->getNumOperands() == 8);
             DEBUG(errs() << "[InfoApp]numOper:" << ci->getNumOperands() << "\n");
@@ -181,11 +214,45 @@ InfoAppPass::runOnModule(Module &M) {
 
             kinds.insert(sinkKind);
             InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
-            xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+            
+	    //check for simple const. assignment
+            //getting valeMap
+            std::set<const Value *> vMap;
+            soln->getValueMap(vMap);
+            
+            if(isConstAssign(vMap))
+            {
+              //replace it for simple const. assignment
+              DEBUG(errs() << "[InfoApp]isConstAssign0:true" << "\n");
+              xformMap[ci] = true;
+              
+            } else {
+              xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+            }
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
             
           } else if (func->getName() == "__ioc_report_conversion") {
             //check for arg. count
             assert(ci->getNumOperands() == 10);
+            
+#ifdef __DBG__
+            uint32_t line = getIntFromVal(ci->getOperand(0));
+            uint32_t col  = getIntFromVal(ci->getOperand(1));
+            
+            if (line != DBG_LINE || col != DBG_COL)
+              continue;
+#endif
             
             std::stringstream SS;
             std::set<std::string> kinds;
@@ -209,14 +276,39 @@ InfoAppPass::runOnModule(Module &M) {
             if(isConstAssign(vMap))
             {
               //replace it for simple const. assignment
+              DEBUG(errs() << "[InfoApp]isConstAssign1:true" << "\n");
               xformMap[ci] = true;
+
             } else {
               xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
             }
-          //XXX: implement from here
-          } else if (func->getName() == "") {
-            //XXX: lldiv, div, iconv ...
-            ;
+	    
+	    if (xformMap[ci]) {
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+		
+	    }
+          } else if ((func->getName() == "div")   ||
+                     (func->getName() == "ldiv")  ||
+                     (func->getName() == "lldiv") ||
+                     (func->getName() == "iconv")
+                     ) {
+            
+            FunctionType *ftype = func->getFunctionType();
+            std::string fname = "__ioc_" + std::string(func->getName());
+            
+            Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                                                       ftype,
+                                                       func->getAttributes());
+            
+            ci->setCalledFunction(ioc_wrapper);
           }
         }
       }
@@ -240,6 +332,10 @@ InfoAppPass::trackSoln(Module &M,
   //need optimization or parallelization
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
+  
+    if (F.getName() != (sinkCI->getParent()->getParent()->getName())) {
+      continue;
+    }
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
       BasicBlock& B = *bi;
       for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -329,7 +425,10 @@ InfoAppPass::trackSoln(Module &M,
 
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                         sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shr_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln)) {
@@ -419,7 +518,10 @@ InfoAppPass::trackSoln(Module &M,
                 
               } else if (sinkFunc->getName() == "__ioc_report_add_overflow" ||
                          sinkFunc->getName() == "__ioc_report_sub_overflow" ||
-                         sinkFunc->getName() == "__ioc_report_mul_overflow")
+                         sinkFunc->getName() == "__ioc_report_mul_overflow" ||
+                         sinkFunc->getName() == "__ioc_report_shr_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_bitwidth" ||
+                         sinkFunc->getName() == "__ioc_report_shl_strict")
               {
                 if (checkForwardTainted(*(sinkCI->getOperand(4)), fsoln) ||
                     checkForwardTainted(*(sinkCI->getOperand(5)), fsoln))
@@ -482,10 +584,13 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
     const Value* val = (const Value*) *vi;
     if (const CallInst* ci = dyn_cast<const CallInst>(val)) {
       Function* func = ci->getCalledFunction();
-      if (func->getName().startswith("llvm.ssub.with.overflow")) {
+      //assert(func && "func should be fine!");
+      if (func && func->getName().startswith("llvm.ssub.with.overflow")) {
         continue;
       } else {
         //XXX: need more for other function calls
+        DEBUG(errs() << "[InfoApp]isConstAssign:" << func->getName() <<"\n");
+        return false;
       }
     } else if (dyn_cast<const LoadInst>(val)) {
       return false;
@@ -495,5 +600,228 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   }
   return true;
 }
+  
+void
+InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
+  for (unsigned i=0; rmCheckList[i].func; i++) {
+    if (F.getName() == rmCheckList[i].func) {
+      //errs() << "DBG0:"<< F.getName() << ":" << i << "\n";
+      for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+        BasicBlock& B = *bi;
+        for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+          if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+            Function* func = ci->getCalledFunction();
+            if (!func)
+              continue;
 
+            if (rmCheckList[i].overflow) {
+              if((func->getName() == "__ioc_report_add_overflow") ||
+                 (func->getName() == "__ioc_report_sub_overflow") ||
+                 (func->getName() == "__ioc_report_mul_overflow")
+                 ) {
+                xformMap[ci] = true;
+                //benign function. replace it.
+                FunctionType *ftype = func->getFunctionType();
+                std::string fname = "__ioc_" + std::string(func->getName());
+            
+                Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                                                              ftype,
+                                                              func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+              }
+            }
+            
+            if (rmCheckList[i].conversion) {
+              if((func->getName() == "__ioc_report_conversion")) {
+                xformMap[ci] = true;
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+              }
+            }
+
+            if (rmCheckList[i].shift) {
+              if((func->getName() == "__ioc_report_shr_bitwidth") ||
+                 (func->getName() == "__ioc_report_shl_bitwidth") ||
+                 (func->getName() == "__ioc_report_shl_strict")
+                 ) {
+                xformMap[ci] = true;
+		//benign function. replace it.
+            	FunctionType *ftype = func->getFunctionType();
+            	std::string fname = "__ioc_" + std::string(func->getName());
+            
+            	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+                	                                  ftype,
+                                                          func->getAttributes());
+            
+            	ci->setCalledFunction(ioc_wrapper);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+uint64_t
+InfoAppPass::getIntFromVal(Value* val) {
+  ConstantInt* num = dyn_cast<ConstantInt>(val);
+  assert(num && "constant int casting check");
+  return num->getZExtValue();
+}
+
+void
+  InfoAppPass::getStringFromVal(Value* val, std::string& output) {
+  Constant* gep = dyn_cast<Constant>(val);
+  assert(gep && "assertion");
+  GlobalVariable* global = dyn_cast<GlobalVariable>(gep->getOperand(0));
+  assert(global && "assertion");
+  ConstantDataArray* array = dyn_cast<ConstantDataArray>(global->getInitializer());
+  if (array->isCString()) {
+    output = array->getAsCString();
+  }
+}
+  
 }  //namespace deps
+
+namespace  {
+  /* ID for InfoAppPass */
+  char InfoAppPass::ID = 0;
+  
+  static RegisterPass<InfoAppPass>
+  XX ("infoapp", "implements infoapp", true, true);
+  
+  
+static void initializeInfoAppPasses(PassRegistry &Registry) {
+  llvm::initializeAllocIdentifyPass(Registry);
+  llvm::initializePDTCachePass(Registry);
+}
+  
+static void registerInfoAppPasses(const PassManagerBuilder &, PassManagerBase &PM)
+{
+  PM.add(llvm::createPromoteMemoryToRegisterPass());
+  PM.add(llvm::createPDTCachePass());
+  PM.add(new InfoAppPass());
+}
+  
+//static RegisterStandardPasses
+//  RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
+//                      registerInfoAppPasses);
+  
+//static RegisterStandardPasses
+//  RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
+//                      registerInfoAppPasses);
+
+
+  
+class StaticInitializer {
+public:
+  StaticInitializer() {
+    char* passend = getenv("__PASSEND__");
+    
+    if (passend) {
+      errs() << "== EP_LoopOptimizerEnd ==\n";
+      RegisterStandardPasses
+      RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
+                        registerInfoAppPasses);
+    } else {
+      errs() << "== EP_ModuleOptimizerEarly\n ==";
+      RegisterStandardPasses
+      RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
+                          registerInfoAppPasses);
+    }
+    
+    
+    PassRegistry &Registry = *PassRegistry::getPassRegistry();
+    initializeInfoAppPasses(Registry);
+  }
+};
+static StaticInitializer InitializeEverything;
+
+}
+
+using namespace std;
+
+static void
+getWhiteList() {
+  string line, file, function, conv;
+  string overflow, shift;
+  bool conv_bool, overflow_bool, shift_bool;
+  unsigned numLines;
+  unsigned i;
+  unsigned pos = 0;
+  ifstream whitelistFile;
+  whitelistFile.open(WHITE_LIST);
+  //get number of lines
+  numLines = 0;
+  while (whitelistFile.good()) {
+    getline(whitelistFile, line);
+    if (!line.empty())
+      numLines++;
+  }
+
+  whitelistFile.clear();
+  whitelistFile.seekg(0, ios::beg);
+
+  rmCheckList = new rmChecks[numLines];
+  for (i = 0; i < numLines; i++) {
+    getline(whitelistFile, line);
+    //handle each line
+    pos = 0;
+    function = line.substr(pos, line.find(","));
+    pos = line.find(",") + 1;
+    file = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    conv = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    overflow = line.substr(pos, line.find(",", pos) - pos);
+    pos = line.find(",", pos) + 1;
+    shift = line.substr(pos, line.size() - pos);
+
+    if (conv.compare("true") == 0)
+      conv_bool = true;
+    else
+      conv_bool = false;
+
+    if (overflow.compare("true") == 0)
+      overflow_bool = true;
+    else
+      overflow_bool = false;
+
+    if (shift.compare("true") == 0)
+      shift_bool = true;
+    else
+      shift_bool = false;
+
+    if (function.compare("0") == 0)
+      rmCheckList[i].func = (char*) 0;
+    else {
+      rmCheckList[i].func = new char[strlen(function.c_str())+1];
+      for (unsigned j = 0; j < strlen(function.c_str()); j++)
+        rmCheckList[i].func[j] = function[j];
+      rmCheckList[i].func[strlen(function.c_str())] = '\0';
+    }
+    if (file.compare("0") == 0)
+      rmCheckList[i].fname =  (char *) 0;
+    else {
+      rmCheckList[i].fname = new char[strlen(file.c_str()) +1];
+      for (unsigned j = 0; j < strlen(file.c_str()); j++)
+        rmCheckList[i].fname[j] = file[j];
+      rmCheckList[i].fname[strlen(file.c_str())] = '\0';
+
+    }
+    rmCheckList[i].conversion = conv_bool;
+    rmCheckList[i].overflow = overflow_bool;
+    rmCheckList[i].shift = shift_bool;
+
+  }
+  whitelistFile.close();
+}

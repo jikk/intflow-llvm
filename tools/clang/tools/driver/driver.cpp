@@ -43,6 +43,9 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/system_error.h"
 #include <cctype>
+
+//#define __BUILD__
+
 using namespace clang;
 using namespace clang::driver;
 
@@ -341,6 +344,27 @@ static void ParseProgName(SmallVectorImpl<const char *> &ArgVector,
 }
 
 int main(int argc_, const char **argv_) {
+  
+  if ((argc_ >= 2) && (argv_[1][0] != '-' ||
+                      argv_[1][1] != 'c' ||
+                      argv_[1][2] != 'c' ||
+                      argv_[1][3] != '1')
+      )
+  {
+#ifdef __BUILD__
+     //argv_[argc_++] = "-fioc-unsigned";
+     //argv_[argc_++] = "-fioc-signed";
+     //argv_[argc_++] = "-fioc-implicit-conversion";
+     //argv_[argc_++] = "-fioc-explicit-conversion";
+     //argv_[argc_++] = "-fioc-shifts";
+     //argv_[argc_++] = "-fioc-strict-shifts";
+#endif
+  }
+
+  //  for (int i=0; i < argc_; i++) {
+  //  printf("DBG:%d  %s\n", i, argv_[i]);
+  //}
+  
   llvm::sys::PrintStackTraceOnErrorSignal();
   llvm::PrettyStackTraceProgram X(argc_, argv_);
 
