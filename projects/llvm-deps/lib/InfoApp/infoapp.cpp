@@ -203,7 +203,7 @@ InfoAppPass::runOnModule(Module &M) {
     Function& F = *mi;
     //XXX: implement something here ..
 
-    errs() << "DBG0:fname:" << F.getName() << "\n";
+    //errs() << "DBG0:fname:" << F.getName() << "\n";
     removeChecksForFunction(F, M);
     
     for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -791,7 +791,7 @@ public:
       RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
                         registerInfoAppPasses);
     } else {
-      errs() << "== EP_ModuleOptimizerEarly\n ==";
+      errs() << "== EP_ModuleOptimizerEarly ==\n";
       RegisterStandardPasses
       RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
                           registerInfoAppPasses);
