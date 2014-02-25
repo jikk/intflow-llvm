@@ -1,6 +1,7 @@
 #include <sstream>
 #include <fstream>
 #include <string>
+#include <vector>
 
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
@@ -25,8 +26,12 @@ using namespace llvm;
 using namespace deps;
 
 static void getWhiteList();
+static void getBlackList();
 
 namespace {
+
+static rmChecks *rmCheckList;
+static std::vector<blacklistEntry> blacklistEntries;
 
   void
   InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
@@ -82,7 +87,6 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
   { 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
 
-static rmChecks *rmCheckList;
   
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
   
@@ -104,15 +108,36 @@ findEntryForFunction(const CallTaintEntry *Summaries,
 }
   
 void
-InfoAppPass::doInitialization() {
-  getWhiteList();
-  infoflow = &getAnalysis<Infoflow>();
-  DEBUG(errs() << "[InfoApp] doInitialization\n");
+InfoAppPass::doInitializationAndRun(Module &M)
+{
+	infoflow = &getAnalysis<Infoflow>();
+	getMode();
+	if (mode == WHITELISTING) {
+		getWhiteList();
+		DEBUG(errs() << "[InfoApp] WhiteListing\n");
+		runOnModuleWhitelisting(M);
+	}
+	else if (mode == BLACKLISTING){
+		getBlackList();
+		DEBUG(errs() << "[InfoApp] BlackListing\n");
+		/* TODO: runOnModuleBlacklisting(M); */
+	}
+	else if (mode == WHITE_SENSITIVE) {
+		/* TODO: to be added */
+		;
+	}
+	else if (mode == BLACK_SENSITIVE) {
+		/* TODO: to be added */
+		;
+	}
+	else
+		/* paranoia */
+		exit(mode);
 }
-  
+
 void
-InfoAppPass::doFinalization() {
-  DEBUG(errs() << "[InfoApp] doFinalization\n");
+InfoAppPass::doFinalizationWhitelisting() {
+  DEBUG(errs() << "[InfoApp] doFinalizationWhitelisting\n");
   DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
   DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
 
@@ -135,12 +160,18 @@ InfoAppPass::doFinalization() {
 }
 
 bool
-InfoAppPass::runOnModule(Module &M) {
+InfoAppPass::runOnModule(Module &M)
+{
+	doInitializationAndRun(M);
+	return false;
+}
+
+void
+InfoAppPass::runOnModuleWhitelisting(Module &M)
+{
   //assigning unique IDs to each overflow locations.
   static uint64_t unique_id = 0;
-
-  doInitialization();
-
+  
   for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
     Function& F = *mi;
     //XXX: implement something here ..
@@ -314,8 +345,7 @@ InfoAppPass::runOnModule(Module &M) {
       }
     }
   }
-  doFinalization();
-  return false;
+  doFinalizationWhitelisting();
 }
 
 //XXX: now it is too messy. the function need some clean-up  
@@ -689,6 +719,36 @@ void
     output = array->getAsCString();
   }
 }
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  getMode
+ *    Arguments:  -
+ *  Description:  Read the mode from the file @MODE_FILE.
+ * ============================================================================
+ */
+void
+InfoAppPass::getMode() {
+	std::ifstream ifmode;
+	std::string tmp;
+	ifmode.open(MODE_FILE);
+	if (!ifmode.is_open()) {
+		errs() << "Failed to open mode file.\n";
+		exit(1);
+	}
+	ifmode >> tmp;
+	mode = (unsigned char) atoi(tmp.c_str());
+	errs() << mode << "\n";
+	ifmode >> tmp;
+	if (ifmode.good()) {
+		errs() << "Mode File contains more than 1 number\n";
+		exit(1);
+	}
+	if (mode < 1 || mode > MODE_MAX_NUM) {
+		errs() << "Wrong mode number\n";
+		exit(1);
+	}
+}
   
 }  //namespace deps
 
@@ -748,80 +808,137 @@ static StaticInitializer InitializeEverything;
 
 }
 
-using namespace std;
 
 static void
 getWhiteList() {
-  string line, file, function, conv;
-  string overflow, shift;
-  bool conv_bool, overflow_bool, shift_bool;
-  unsigned numLines;
-  unsigned i;
-  unsigned pos = 0;
-  ifstream whitelistFile;
-  whitelistFile.open(WHITE_LIST);
-  //get number of lines
-  numLines = 0;
-  while (whitelistFile.good()) {
-    getline(whitelistFile, line);
-    if (!line.empty())
-      numLines++;
-  }
+	std::string line, file, function, conv;
+	std::string overflow, shift;
+	bool conv_bool, overflow_bool, shift_bool;
+	unsigned numLines;
+	unsigned i;
+	unsigned pos = 0;
+	std::ifstream whitelistFile;
+	whitelistFile.open(WHITE_LIST);
+	//get number of lines
+	numLines = 0;
+	while (whitelistFile.good()) {
+		std::getline(whitelistFile, line);
+		if (!line.empty())
+			numLines++;
+	}
 
-  whitelistFile.clear();
-  whitelistFile.seekg(0, ios::beg);
+	whitelistFile.clear();
+	whitelistFile.seekg(0, std::ios::beg);
 
-  rmCheckList = new rmChecks[numLines];
-  for (i = 0; i < numLines; i++) {
-    getline(whitelistFile, line);
-    //handle each line
-    pos = 0;
-    function = line.substr(pos, line.find(","));
-    pos = line.find(",") + 1;
-    file = line.substr(pos, line.find(",", pos) - pos);
-    pos = line.find(",", pos) + 1;
-    conv = line.substr(pos, line.find(",", pos) - pos);
-    pos = line.find(",", pos) + 1;
-    overflow = line.substr(pos, line.find(",", pos) - pos);
-    pos = line.find(",", pos) + 1;
-    shift = line.substr(pos, line.size() - pos);
+	rmCheckList = new rmChecks[numLines];
+	for (i = 0; i < numLines; i++) {
+		getline(whitelistFile, line);
+		//handle each line
+		pos = 0;
+		function = line.substr(pos, line.find(","));
+		pos = line.find(",") + 1;
+		file = line.substr(pos, line.find(",", pos) - pos);
+		pos = line.find(",", pos) + 1;
+		conv = line.substr(pos, line.find(",", pos) - pos);
+		pos = line.find(",", pos) + 1;
+		overflow = line.substr(pos, line.find(",", pos) - pos);
+		pos = line.find(",", pos) + 1;
+		shift = line.substr(pos, line.size() - pos);
 
-    if (conv.compare("true") == 0)
-      conv_bool = true;
-    else
-      conv_bool = false;
+		if (conv.compare("true") == 0)
+			conv_bool = true;
+		else
+			conv_bool = false;
 
-    if (overflow.compare("true") == 0)
-      overflow_bool = true;
-    else
-      overflow_bool = false;
+		if (overflow.compare("true") == 0)
+			overflow_bool = true;
+		else
+			overflow_bool = false;
 
-    if (shift.compare("true") == 0)
-      shift_bool = true;
-    else
-      shift_bool = false;
+		if (shift.compare("true") == 0)
+			shift_bool = true;
+		else
+			shift_bool = false;
 
-    if (function.compare("0") == 0)
-      rmCheckList[i].func = (char*) 0;
-    else {
-      rmCheckList[i].func = new char[strlen(function.c_str())+1];
-      for (unsigned j = 0; j < strlen(function.c_str()); j++)
-        rmCheckList[i].func[j] = function[j];
-      rmCheckList[i].func[strlen(function.c_str())] = '\0';
-    }
-    if (file.compare("0") == 0)
-      rmCheckList[i].fname =  (char *) 0;
-    else {
-      rmCheckList[i].fname = new char[strlen(file.c_str()) +1];
-      for (unsigned j = 0; j < strlen(file.c_str()); j++)
-        rmCheckList[i].fname[j] = file[j];
-      rmCheckList[i].fname[strlen(file.c_str())] = '\0';
+		if (function.compare("0") == 0)
+			rmCheckList[i].func = (char*) 0;
+		else {
+			rmCheckList[i].func = new char[strlen(function.c_str())+1];
+			for (unsigned j = 0; j < strlen(function.c_str()); j++)
+				rmCheckList[i].func[j] = function[j];
+			rmCheckList[i].func[strlen(function.c_str())] = '\0';
+		}
+		if (file.compare("0") == 0)
+			rmCheckList[i].fname =  (char *) 0;
+		else {
+			rmCheckList[i].fname = new char[strlen(file.c_str()) +1];
+			for (unsigned j = 0; j < strlen(file.c_str()); j++)
+				rmCheckList[i].fname[j] = file[j];
+			rmCheckList[i].fname[strlen(file.c_str())] = '\0';
 
-    }
-    rmCheckList[i].conversion = conv_bool;
-    rmCheckList[i].overflow = overflow_bool;
-    rmCheckList[i].shift = shift_bool;
+		}
+		rmCheckList[i].conversion = conv_bool;
+		rmCheckList[i].overflow = overflow_bool;
+		rmCheckList[i].shift = shift_bool;
 
-  }
-  whitelistFile.close();
+	}
+	whitelistFile.close();
 }
+
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  getBlackList
+ *  Description:  reads the blacklist from the BLACK_LIST file and fills the
+ *  		  static vector blacklistEntries. The file format is:
+ *  		  <function_name>,<taint_return_value>,<taint_argument>...
+ *  		  taint_return_value takes true/false.
+ *  		  taint_argument is the number of the argument to be tainted,
+ *  		  starting from 0
+ *  		  NOTE: No spaces around the commas should be used
+ *    Arguments:  -
+ * ============================================================================
+ */
+static void
+getBlackList()
+{
+	std::ifstream blacklist;
+	std::string line, fname;
+	bool retval;
+	std::vector<int> tmpArgs;
+	size_t pos, pos2;
+	blacklistEntry tmp;
+
+	blacklist.open(BLACK_LIST);
+	if (!blacklist.is_open()) {
+		errs() << "Error opening the blacklist file\n";
+		return;
+	}
+	
+	while (blacklist.good()) {
+		tmpArgs.clear();
+		std::getline(blacklist, line);
+		/* get fname */
+		pos = line.find_first_of(',');
+		fname = line.substr(0, pos);
+		pos2 = line.find_first_of(',', pos+1);
+		if (line.substr(pos+1, pos2 - pos - 1).compare("true") == 0)
+			retval = true;
+		else
+			retval = false;
+
+		while (pos2 != std::string::npos) {
+			pos = pos2;
+			pos2 = line.find_first_of(',', pos +1);
+			tmpArgs.push_back(atoi(line.substr(pos+1,
+							   pos2 - pos -1).c_str()));
+			errs() << atoi(line.substr(pos+1, pos2 - pos -1).c_str()) << "\n";
+		}
+		tmp.fname = fname;
+		tmp.taintRetval = retval;
+		tmp.taintedArgs = tmpArgs;
+
+		blacklistEntries.push_back(tmp);
+	}
+}
+/* -----  end of function getBlackList  ----- */

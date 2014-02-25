@@ -12,7 +12,15 @@
 
 #include <set>
 
-#define WHITE_LIST "/opt/stonesoup/etc/whitelist.files"
+#define WHITE_LIST	"/opt/stonesoup/etc/whitelist.files"
+#define BLACK_LIST	"/opt/stonesoup/etc/blacklist.files"
+#define MODE_FILE	"/opt/stonesoup/etc/mode"
+#define WHITELISTING	1
+#define BLACKLISTING	2
+#define WHITE_SENSITIVE	3
+#define	BLACK_SENSITIVE	4
+#define MODE_MAX_NUM	4
+
 
 using namespace llvm;
 using namespace deps;
@@ -35,10 +43,14 @@ class InfoAppPass : public ModulePass {
     DenseMap<const Value*, bool> xformMap;
     std::set<StringRef> whiteSet;
     std::set<StringRef> blackSet;
+    unsigned char mode;
 
-    virtual void doInitialization();
-    virtual void doFinalization();
-  
+    virtual void doInitializationAndRun(Module &M);
+    virtual void doFinalizationWhitelisting();
+
+    void runOnModuleWhitelisting(Module &M);
+//    void runOnModuleBlacklisting(Module &M);
+
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.
     /// if it returns true: tag it to replace it with dummy
@@ -57,6 +69,8 @@ class InfoAppPass : public ModulePass {
     uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
     void getStringFromVal(Value* val, std::string& output);
+    void getMode();
+
 };  //class
   
 typedef  struct {
@@ -67,7 +81,12 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
-  
+typedef struct {
+	std::string fname;
+	bool taintRetval;
+	std::vector<int> taintedArgs;
+} blacklistEntry;
+
 }  // nameapce
 
 #endif
