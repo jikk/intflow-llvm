@@ -76,7 +76,7 @@ static const struct CallTaintEntry bLstSourceSummaries[] = {
 	// function  tainted values   tainted direct memory tainted root ptrs
 	{ "fgets",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
 	{ "getchar", TAINTS_RETURN_VAL,  TAINTS_NOTHING,    TAINTS_NOTHING },
-	{ "_IO_getc", TAINTS_RETURN_VAL,  TAINTS_NOTHING,    TAINTS_NOTHING },
+	{ "_IO_getc",TAINTS_RETURN_VAL,  TAINTS_NOTHING,    TAINTS_NOTHING },
 	{ 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
 
@@ -165,13 +165,87 @@ InfoAppPass::runOnModule(Module &M)
 }
 
 
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  forwardSlicingBlacklisting
+ *  Description:  Implements forward slicing in blacking mode.
+ *  			  Specifically it taints @src (which is already identified as
+ *  			  untrusted) and finds all ioc_report_* functions that are
+ *  			  using the tainted data.
+ *    Arguments:  @src - the untrusted function specified by bLstSourceSummaries
+ *    			  @fsoln - pointer that will hold the InfoflowSolutioni
+ *    			  @entry - the CallTaintEntry that holds the necessary
+ *    			  information about @src
+ *    			  @id - the unique id of the @src
+ * ============================================================================
+ */
+InfoflowSolution *
+InfoAppPass::forwardSlicingBlacklisting (CallInst *ci,
+							const CallTaintEntry *entry,
+							uint64_t id)
+{
+	std::stringstream SS;
+	std::set<std::string> kinds;
+	std::string srcKind;
+	InfoflowSolution *fsoln;
+	const CallTaintSummary *vSum = &(entry->ValueSummary);
+	const CallTaintSummary *dSum = &(entry->DirectPointerSummary);
+	const CallTaintSummary *rSum = &(entry->RootPointerSummary);
+	
+	SS << id;
+	srcKind = "src" + SS.str();
+	kinds.insert(srcKind);
+
+	if (vSum->TaintsReturnValue)
+		infoflow->setTainted(srcKind, *ci);
+
+	for (unsigned ArgIndex = 0;
+			ArgIndex < vSum->NumArguments;
+			++ArgIndex) {
+
+		if (vSum->TaintsArgument[ArgIndex])
+			infoflow->setTainted(srcKind,
+					*(ci->getOperand(ArgIndex)));
+	}
+
+	if (dSum->TaintsReturnValue)
+		infoflow->setDirectPtrTainted(srcKind, *ci);
+
+	for (unsigned ArgIndex = 0;
+			ArgIndex < dSum->NumArguments;
+			++ArgIndex) {
+		if (dSum->TaintsArgument[ArgIndex])
+			infoflow->setDirectPtrTainted(srcKind,
+					*(ci->getOperand(ArgIndex)));
+	}
+
+	if (rSum->TaintsReturnValue)
+		infoflow->setReachPtrTainted(srcKind, *ci);
+
+	for (unsigned ArgIndex = 0;
+			ArgIndex < rSum->NumArguments;
+			++ArgIndex) {
+		if (rSum->TaintsArgument[ArgIndex])
+			infoflow->setReachPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
+	}
+
+	/*  FIXME: Is the last argument correct (true)? */
+	fsoln = infoflow->leastSolution(kinds, false, true);
+
+	return fsoln;
+
+}
+/* -----  end of function forwardSlicingBlacklisting  ----- */
+
+
 /* 
  * ===  FUNCTION  =============================================================
  *         Name:  runOnModuleBlacklisting
  *    Arguments:  @M - The source code module
  *  Description:  Implements InfoAppPass Blacklisting. Removes the checks from
  *  		  every operation unless this operation is identified as
- *  		  untrusted after forward and backward slicing.
+ *  		  untrusted after forward (implemented here) and backward slicing
+ *  		  (implemented in trackSinks).
  *  		  Untrusted sources are defined at bLstSourceSummaries.
  *  		  It also uses the whitelist provided at WHITE_LIST in order to
  *  		  remove manually identified benign operations.
@@ -181,7 +255,10 @@ void
 InfoAppPass::runOnModuleBlacklisting(Module &M)
 {
 	//assigning unique IDs to each overflow locations.
-	static uint64_t unique_id = 0;
+	uint64_t unique_id = 0;
+	Function *func;
+	InfoflowSolution *fsoln;
+
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		//XXX: implement something here ..
@@ -192,13 +269,14 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					Function* func = ci->getCalledFunction();
+					func = ci->getCalledFunction();
 					if (!func)
 						continue;
 
 
 					const CallTaintEntry *entry =
-						findEntryForFunction(bLstSourceSummaries, func->getName());
+						findEntryForFunction(bLstSourceSummaries,
+														func->getName());
 
 					if (entry->Name) {
 #ifdef __DBG__
@@ -207,54 +285,10 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 						if (line != DBG_LINE || col != DBG_COL)
 							continue;
 #endif
+						fsoln = forwardSlicingBlacklisting(ci, entry, unique_id++);
+						
+						backwardSlicingBlacklisting(M, fsoln, ci);
 
-						std::stringstream SS;
-						std::set<std::string> kinds;
-
-						SS << unique_id++;
-						std::string srcKind = "src" + SS.str();
-						kinds.insert(srcKind); /* XXX: is this needed??? */
-
-						const CallTaintSummary *vSum = &(entry->ValueSummary);
-						const CallTaintSummary *dSum = &(entry->DirectPointerSummary);
-						const CallTaintSummary *rSum = &(entry->RootPointerSummary);
-
-						if (vSum->TaintsReturnValue)
-							infoflow->setTainted(srcKind, *ci);
-
-						for (unsigned ArgIndex = 0;
-								ArgIndex < vSum->NumArguments;
-								++ArgIndex) {
-
-							if (vSum->TaintsArgument[ArgIndex])
-								infoflow->setTainted(srcKind, *(ci->getOperand(ArgIndex)));
-						}
-
-						if (dSum->TaintsReturnValue)
-							infoflow->setDirectPtrTainted(srcKind, *ci);
-
-						for (unsigned ArgIndex = 0;
-								ArgIndex < dSum->NumArguments;
-								++ArgIndex) {
-							if (dSum->TaintsArgument[ArgIndex])
-								infoflow->setDirectPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
-						}
-
-						if (rSum->TaintsReturnValue)
-							infoflow->setReachPtrTainted(srcKind, *ci);
-
-						for (unsigned ArgIndex = 0;
-								ArgIndex < rSum->NumArguments;
-								++ArgIndex) {
-							if (rSum->TaintsArgument[ArgIndex])
-								infoflow->setReachPtrTainted(srcKind, *(ci->getOperand(ArgIndex)));
-						}
-
-						/*  FIXME: Is the last argument correct (true)? */
-						InfoflowSolution* fsoln =
-							infoflow->leastSolution(kinds, false, true);
-
-						trackSinks(M, fsoln, ci, srcKind);
 					}  else if ((func->getName() == "div")   ||
 							(func->getName() == "ldiv")  ||
 							(func->getName() == "lldiv") ||
@@ -328,12 +362,12 @@ InfoAppPass::removeBenignChecks(Module &M)
 }
 
 void
-InfoAppPass::trackSinks(Module &M,
-		InfoflowSolution* fsoln,
-		CallInst* srcCI,
-		std::string& kind)
+InfoAppPass::backwardSlicingBlacklisting(Module &M,
+										InfoflowSolution* fsoln,
+										CallInst* srcCI)
 {
-	unsigned unique_id = 0;
+	uint64_t unique_id = 0;
+	Function *func;
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		//XXX: implement something here ..
@@ -343,11 +377,13 @@ InfoAppPass::trackSinks(Module &M,
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					Function *func = ci->getCalledFunction();
-					if(func->getName() == "__ioc_report_conversion") {
+					if (xformMap[ci])
+						continue;
+					func = ci->getCalledFunction();
+					if (func->getName() == "__ioc_report_conversion") {
 						xformMap[ci] = false;
+						
 						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
-							errs() << func->getName() << " ok!\n";
 							//check for arg. count
 							assert(ci->getNumOperands() == 10);
 							std::stringstream SS;
@@ -364,11 +400,9 @@ InfoAppPass::trackSinks(Module &M,
 							kinds.insert(sinkKind);
 							InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
 
-							if (checkBackwardTainted(*srcCI, soln)) {
-								errs() << srcCI->getCalledFunction()->getName() << " error!\n";
+							if (checkBackwardTainted(*srcCI, soln))
 								/*  success */
 								xformMap[ci]	= true;
-							}
 						}
 					} else if (func->getName() == "__ioc_report_add_overflow" ||
 							func->getName() == "__ioc_report_sub_overflow" ||
@@ -400,11 +434,9 @@ InfoAppPass::trackSinks(Module &M,
 							InfoflowSolution* soln = infoflow->greatestSolution(kinds, false);
 
 							/* check if srcCI is backward tainted */
-							if (checkBackwardTainted(*srcCI, soln)) {
-								errs() << srcCI->getCalledFunction()->getName() << " error!\n";
-								/* success, ci is untrusted */
+							if (checkBackwardTainted(*srcCI, soln))
+								/* success */
 								xformMap[ci] = true;
-							}
 						}
 					}
 				}

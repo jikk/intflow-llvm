@@ -59,10 +59,14 @@ class InfoAppPass : public ModulePass {
                    InfoflowSolution* soln,
                    CallInst* sinkCI,
                    std::string& kinds);
-    void trackSinks(Module &M,
-                   InfoflowSolution* fsoln,
-                   CallInst* srcCI,
-                   std::string& kinds);
+    void backwardSlicingBlacklisting(Module &M,
+   					InfoflowSolution* fsoln,
+					CallInst* srcCI);
+
+	InfoflowSolution *forwardSlicingBlacklisting(CallInst *ci,
+							const CallTaintEntry *entry,
+							uint64_t id);
+
 
     void removeBenignChecks(Module &M);
 
