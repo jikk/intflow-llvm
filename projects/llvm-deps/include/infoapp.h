@@ -13,7 +13,6 @@
 #include <set>
 
 #define WHITE_LIST	"/opt/stonesoup/etc/whitelist.files"
-#define BLACK_LIST	"/opt/stonesoup/etc/blacklist.files"
 #define MODE_FILE	"/opt/stonesoup/etc/mode"
 #define WHITELISTING	1
 #define BLACKLISTING	2
@@ -49,7 +48,7 @@ class InfoAppPass : public ModulePass {
     virtual void doFinalizationWhitelisting();
 
     void runOnModuleWhitelisting(Module &M);
-//    void runOnModuleBlacklisting(Module &M);
+    void runOnModuleBlacklisting(Module &M);
 
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.
@@ -60,6 +59,12 @@ class InfoAppPass : public ModulePass {
                    InfoflowSolution* soln,
                    CallInst* sinkCI,
                    std::string& kinds);
+    void trackSinks(Module &M,
+                   InfoflowSolution* fsoln,
+                   CallInst* srcCI,
+                   std::string& kinds);
+
+    void removeBenignChecks(Module &M);
 
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
@@ -80,12 +85,6 @@ typedef  struct {
   bool overflow;
   bool shift;
 } rmChecks;
-
-typedef struct {
-	std::string fname;
-	bool taintRetval;
-	std::vector<int> taintedArgs;
-} blacklistEntry;
 
 }  // nameapce
 
