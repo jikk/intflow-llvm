@@ -45,7 +45,7 @@ class InfoAppPass : public ModulePass {
     unsigned char mode;
 
     virtual void doInitializationAndRun(Module &M);
-    virtual void doFinalizationWhitelisting();
+    virtual void doFinalization();
 
     void runOnModuleWhitelisting(Module &M);
     void runOnModuleBlacklisting(Module &M);
