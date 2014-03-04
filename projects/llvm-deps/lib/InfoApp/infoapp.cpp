@@ -143,12 +143,14 @@ InfoAppPass::doFinalization() {
 	for (;xi!=xe; xi++) {
 		std::string output;
 		raw_string_ostream rs(output);
-		format_ioc_report_func(xi->first, rs);
+		if (xi->second) {
+			format_ioc_report_func(xi->first, rs);
 
-		//changed ones
-		errs() << "[InfoApp]xformMap:" << xi->second << ":";
-		errs() << rs.str();
-		errs() << "\n";
+			//changed ones
+			errs() << "[InfoApp]xformMap:" << xi->second << ":";
+			errs() << rs.str();
+			errs() << "\n";
+		}
 	}
 	for (unsigned i=0; rmCheckList[i].func; i++) {
 		delete rmCheckList[i].func;
