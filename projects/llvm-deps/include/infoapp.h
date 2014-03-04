@@ -72,7 +72,11 @@ class InfoAppPass : public ModulePass {
 										  CallInst *ci,
 										  const CallTaintEntry *entry);
 
+	InfoflowSolution *untaint_all_but_conv(std::string s, CallInst *ci);
+	InfoflowSolution *untaint_conv(std::string s, CallInst *ci);
+	std::string getsinkKind(uint64_t *id);
     void removeBenignChecks(Module &M);
+	void setWrapper(CallInst *ci, Module &M, Function *f);
 	bool chk_report_all_but_conv(std::string s);
 	bool chk_report_all(std::string s);
 	bool chk_report_arithm(std::string s);

@@ -87,7 +87,6 @@ InfoAppPass::doFinalization() {
 		raw_string_ostream rs(output);
 		if (xi->second) {
 			format_ioc_report_func(xi->first, rs);
-
 			errs() << "[InfoApp]xformMap:" << xi->second << ":";
 			errs() << rs.str();
 			errs() << "\n";
@@ -98,6 +97,7 @@ InfoAppPass::doFinalization() {
 		delete rmCheckList[i].func;
 		delete rmCheckList[i].fname;
 	}
+	
 	delete rmCheckList;
 }
 
@@ -227,8 +227,7 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		//XXX: implement something here ..
-		errs() << "DBG0:fname:" << F.getName() << "\n";
+		dbg_msg("DBG0:fname:", F.getName());
 		removeChecksForFunction(F, M);
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
@@ -258,14 +257,7 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 								(func->getName() == "lldiv") ||
 								(func->getName() == "iconv")) {
 						/* these need to be handled anyway */
-						FunctionType *ftype = func->getFunctionType();
-						std::string fname = "__ioc_" + 
-							std::string(func->getName());
-
-						Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-																	  ftype,
-													  func->getAttributes());
-						ci->setCalledFunction(ioc_wrapper);
+						setWrapper(ci, M, func);
 					}
 				}
 			} /* for-loops close here*/
@@ -291,27 +283,14 @@ InfoAppPass::removeBenignChecks(Module &M)
 {
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		errs() << "DBG0:fname:" << F.getName() << "\n";
+		dbg_msg("DBG0:fname:", F.getName());
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					
 					Function *func = ci->getCalledFunction();
-					if (chk_report_all(func->getName()) && !xformMap[ci]) {
-						/* remove checks */
-						FunctionType *ftype = func->getFunctionType();
-						
-						std::string fname = "__ioc_" + 
-							std::string(func->getName());
-
-						Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-																	  ftype,
-													  func->getAttributes());
-
-						ci->setCalledFunction(ioc_wrapper);
-					}
+					if (chk_report_all(func->getName()) && !xformMap[ci])
+						setWrapper(ci, M, func);
 				}
 			}
 		}
@@ -327,13 +306,11 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 	Function *func;
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		errs() << "DBG0:fname:" << F.getName() << "\n";
+		dbg_msg("DBG0:fname:", F.getName());
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					
 					if (xformMap[ci])
 						continue;
 					
@@ -344,56 +321,27 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
 							//check for arg. count
 							assert(ci->getNumOperands() == 10);
-							std::stringstream SS;
-							std::set<std::string> kinds;
-
-							SS << unique_id++;
-							std::string sinkKind = "overflow" + SS.str();
-
-							Value* val = ci->getOperand(7);
-
-							//tagging unary arg
-							infoflow->setUntainted(sinkKind, *val);
-
-							kinds.insert(sinkKind);
+							
 							//this returns all sources that are tainted
-							InfoflowSolution* soln = 
-								infoflow->greatestSolution(kinds, false);
+							std::string sinkKind = getsinkKind(&unique_id);
+							InfoflowSolution* soln = untaint_conv(sinkKind, ci);
 
 							//check if source is in our list
 							if (checkBackwardTainted(*srcCI, soln))
-								/*  success */
-								xformMap[ci]	= true;
+								xformMap[ci] = true;
 						}
 					
 					} else if (chk_report_all_but_conv(func->getName())) {
 						xformMap[ci] = false;
 						if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
 							checkForwardTainted(*(ci->getOperand(5)), fsoln)) {
-							/* FIXME:how to figure out which operand is tainted?
-							 * Maybe taint both of them for backward slicing? */
-							std::stringstream SS;
-							std::set<std::string> kinds;
-
-							SS << unique_id++;
-							std::string sinkKind = "overflow" + SS.str();
-
-							Value* lval = ci->getOperand(4);
-							Value* rval = ci->getOperand(5);
-
-							//tagging lVal
-							infoflow->setUntainted(sinkKind, *lval);
-
-							//tagging rVal
-							infoflow->setUntainted(sinkKind, *rval);
-
-							kinds.insert(sinkKind);
-							InfoflowSolution* soln =
-								infoflow->greatestSolution(kinds, false);
-
+							
+							std::string sinkKind = getsinkKind(&unique_id);
+							InfoflowSolution* soln = 
+								untaint_all_but_conv(sinkKind, ci);
+							
 							/* check if srcCI is backward tainted */
 							if (checkBackwardTainted(*srcCI, soln))
-								/* success */
 								xformMap[ci] = true;
 						}
 					}
@@ -401,6 +349,49 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 			}
 		}
 	}
+}
+
+/*
+ * Helper Functions
+ */
+std::string
+InfoAppPass::getsinkKind(uint64_t *unique_id)
+{
+	std::stringstream SS;
+	SS << (*unique_id)++;
+	return "overflow" + SS.str();
+}
+
+
+InfoflowSolution *
+InfoAppPass::untaint_all_but_conv(std::string sinkKind, CallInst *ci)
+{
+	Value* lval = ci->getOperand(4);
+	Value* rval = ci->getOperand(5);
+
+	//tagging lVal
+	infoflow->setUntainted(sinkKind, *lval);
+	
+	//tagging rVal
+	infoflow->setUntainted(sinkKind, *rval);
+
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	return infoflow->greatestSolution(kinds, false);
+}
+
+InfoflowSolution *
+InfoAppPass::untaint_conv(std::string sinkKind, CallInst *ci)
+{
+	Value* val = ci->getOperand(7);
+	//tagging unary arg
+	infoflow->setUntainted(sinkKind, *val);
+	
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	return infoflow->greatestSolution(kinds, false);
 }
 
 void
@@ -421,26 +412,6 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
 
-					/*
-					   List of overflow report functions
-
-LVal: 4th arg, RVal: 5th arg
-__ioc_report_add_overflow()
-__ioc_report_sub_overflow()
-__ioc_report_mul_overflow()
-
-Val: 7th arg
-__ioc_report_conversion()
-*/
-
-					/*
-XXX: this more about the following functions
-__ioc_report_div_error()
-__ioc_report_rem_error()
-__ioc_report_shl_bitwidth()
-__ioc_report_shl_strict()
-*/
-
 					Function* func = ci->getCalledFunction();
 					if (!func)
 						continue;
@@ -459,59 +430,31 @@ __ioc_report_shl_strict()
 						
 						std::stringstream ss;
 						ss << ci->getNumOperands();
-						dbg_msg("numOper:", ss.str());
 						
+						dbg_msg("numOper:", ss.str());
 						dbg_msg("func_name:", func->getName());
-
-						std::stringstream SS;
-						std::set<std::string> kinds;
-
-						SS << unique_id++;
-						std::string sinkKind = "overflow" + SS.str();
-
-						Value* lval = ci->getOperand(4);
-						Value* rval = ci->getOperand(5);
-
-						//tagging lVal
-						infoflow->setUntainted(sinkKind, *lval);
-
-						//tagging rVal
-						infoflow->setUntainted(sinkKind, *rval);
-
-						kinds.insert(sinkKind);
-						InfoflowSolution* soln =
-							infoflow->greatestSolution(kinds, false);
-
+						
+						std::string sinkKind = getsinkKind(&unique_id);
+						InfoflowSolution* soln = 
+							untaint_all_but_conv(sinkKind, ci);
+						
 						//check for simple const. assignment
 						//getting valeMap
 						std::set<const Value *> vMap;
 						soln->getValueMap(vMap);
 
-						if(isConstAssign(vMap))
-						{
+						if(isConstAssign(vMap)) {
 							//replace it for simple const. assignment
 							dbg_err("isConstAssign0:true");
 							xformMap[ci] = true;
-
 						} else {
 							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
 						}
+
 						if (xformMap[ci]) {
+							setWrapper(ci, M, func);
 							//if (theofilos(M, ci) ) {
-							//benign function. replace it.
-							FunctionType *ftype = func->getFunctionType();
-							std::string fname = "__ioc_" +
-								std::string(func->getName());
-
-							Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-									ftype,
-									func->getAttributes());
-
-							ci->setCalledFunction(ioc_wrapper);
-	//						}
-
 						}
-
 					} else if (func->getName() == "__ioc_report_conversion") {
 						//check for arg. count
 						assert(ci->getNumOperands() == 10);
@@ -524,20 +467,8 @@ __ioc_report_shl_strict()
 							continue;
 #endif
 
-						std::stringstream SS;
-						std::set<std::string> kinds;
-
-						SS << unique_id++;
-						std::string sinkKind = "overflow" + SS.str();
-
-						Value* val = ci->getOperand(7);
-
-						//tagging unary arg
-						infoflow->setUntainted(sinkKind, *val);
-
-						kinds.insert(sinkKind);
-						InfoflowSolution* soln =
-							infoflow->greatestSolution(kinds, false);
+						std::string sinkKind = getsinkKind(&unique_id);
+						InfoflowSolution* soln = untaint_conv(sinkKind, ci);
 
 						//check for simple const. assignment
 						//getting valeMap
@@ -555,32 +486,15 @@ __ioc_report_shl_strict()
 						}
 
 						if (xformMap[ci]) {
-							//benign function. replace it.
-							FunctionType *ftype = func->getFunctionType();
-							std::string fname = "__ioc_" +
-								std::string(func->getName());
-
-							Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-									ftype,
-									func->getAttributes());
-
-							ci->setCalledFunction(ioc_wrapper);
-
+							//theofilos check 
+							setWrapper(ci, M, func);
 						}
 					} else if ((func->getName() == "div")   ||
 							(func->getName() == "ldiv")  ||
 							(func->getName() == "lldiv") ||
 							(func->getName() == "iconv")
 							) {
-
-						FunctionType *ftype = func->getFunctionType();
-						std::string fname = "__ioc_" + std::string(func->getName());
-
-						Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-								ftype,
-								func->getAttributes());
-
-						ci->setCalledFunction(ioc_wrapper);
+							setWrapper(ci, M, func);
 					}
 				}
 			}
@@ -627,6 +541,7 @@ InfoAppPass::trackSoln(Module &M,
 	return ret;
 }
 
+/* FIXME refactor */
 bool 
 InfoAppPass::trackSolnInst(CallInst *ci,
 						   Module &M,
@@ -791,53 +706,18 @@ InfoAppPass::removeChecksInst(CallInst *ci, unsigned int i, Module &M)
 	Function* f = ci->getCalledFunction();
 	if (!f)
 		return;
-
-	/* remove overflow */
-	if (rmCheckList[i].overflow) {
-		if(chk_report_arithm(f->getName())) {
+	
+	std::string fname = f->getName();
+	
+	if (
+		/* remove overflow */
+		(rmCheckList[i].overflow && chk_report_arithm(fname)) 				||
+		/* remove conversion */
+		(rmCheckList[i].conversion && (fname == "__ioc_report_conversion")) ||
+		/* remove shift */
+		(rmCheckList[i].shift && chk_report_shl(fname))) {
 			xformMap[ci] = true;
-			//benign function. replace it.
-			FunctionType *ftype = f->getFunctionType();
-			std::string fname = "__ioc_" + std::string(f->getName());
-
-			Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-														  ftype,
-														  f->getAttributes());
-
-			ci->setCalledFunction(ioc_wrapper);
-		}
-	}
-
-	/* remove conversion */
-	if (rmCheckList[i].conversion) {
-		if((f->getName() == "__ioc_report_conversion")) {
-			xformMap[ci] = true;
-			//benign function. replace it.
-			FunctionType *ftype = f->getFunctionType();
-			std::string fname = "__ioc_" + std::string(f->getName());
-
-			Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-														  ftype,
-														  f->getAttributes());
-
-			ci->setCalledFunction(ioc_wrapper);
-		}
-	}
-
-	/* remove shift */
-	if (rmCheckList[i].shift) {
-		if(chk_report_shl(f->getName()))
-		{
-			xformMap[ci] = true;
-			//benign function. replace it.
-			FunctionType *ftype = f->getFunctionType();
-			std::string fname = "__ioc_" + std::string(f->getName());
-
-			Constant* ioc_wrapper = M.getOrInsertFunction(fname,
-														  ftype,
-														  f->getAttributes());
-			ci->setCalledFunction(ioc_wrapper);
-		}
+			setWrapper(ci, M, f);
 	}
 }
 
@@ -915,16 +795,6 @@ static void registerInfoAppPasses(const PassManagerBuilder &,
 	PM.add(new InfoAppPass());
 }
 
-//static RegisterStandardPasses
-//  RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
-//                      registerInfoAppPasses);
-
-//static RegisterStandardPasses
-//  RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
-//                      registerInfoAppPasses);
-
-
-
 class StaticInitializer {
 	public:
 		StaticInitializer() {
@@ -941,7 +811,6 @@ class StaticInitializer {
 				RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
 							registerInfoAppPasses);
 			}
-
 
 			PassRegistry &Registry = *PassRegistry::getPassRegistry();
 			initializeInfoAppPasses(Registry);
@@ -1027,6 +896,19 @@ getWhiteList() {
 
 	}
 	whitelistFile.close();
+}
+
+void
+InfoAppPass::setWrapper(CallInst *ci, Module &M, Function *func)
+{
+	FunctionType *ftype = func->getFunctionType();
+	std::string fname = "__ioc_" + std::string(func->getName());
+
+	Constant* ioc_wrapper = M.getOrInsertFunction(fname,
+												  ftype,
+												  func->getAttributes());
+	ci->setCalledFunction(ioc_wrapper);
+
 }
 
 /*
