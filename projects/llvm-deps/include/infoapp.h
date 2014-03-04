@@ -55,25 +55,39 @@ class InfoAppPass : public ModulePass {
     /// if it returns true: tag it to replace it with dummy
     ///       returns false: do not change
   
-    bool trackSoln(Module &M,
-                   InfoflowSolution* soln,
-                   CallInst* sinkCI,
-                   std::string& kinds);
-    void backwardSlicingBlacklisting(Module &M,
-   					InfoflowSolution* fsoln,
-					CallInst* srcCI);
+	bool trackSoln(Module &M,
+				   InfoflowSolution* soln,
+				   CallInst* sinkCI,
+				   std::string& kinds);
+	bool trackSolnInst(CallInst *i, Module &M, CallInst *ci, std::string& s);
+	void backwardSlicingBlacklisting(Module &M,
+									 InfoflowSolution* fsoln,
+									 CallInst* srcCI);
 
 	InfoflowSolution *forwardSlicingBlacklisting(CallInst *ci,
-							const CallTaintEntry *entry,
-							uint64_t id);
+												 const CallTaintEntry *entry,
+												 uint64_t id);
 
+	InfoflowSolution *callTaintSetTainted(std::string s,
+										  CallInst *ci,
+										  const CallTaintEntry *entry);
 
     void removeBenignChecks(Module &M);
-
-    bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
-    bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
+	bool chk_report_all_but_conv(std::string s);
+	bool chk_report_all(std::string s);
+	bool chk_report_arithm(std::string s);
+	bool chk_report_shl(std::string s);
+	void dbg_err(std::string s);
+	void dbg_msg(std::string s, std::string b);
+    bool checkBackwardTainted(Value &V,
+							  InfoflowSolution* soln,
+							  bool direct=true);
+    bool checkForwardTainted(Value &V,
+							 InfoflowSolution* soln,
+							 bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
     void removeChecksForFunction(Function& F, Module& M);
+    void removeChecksInst(CallInst *i, unsigned int m, Module &M);
     void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
     uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
