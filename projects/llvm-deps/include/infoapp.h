@@ -16,10 +16,9 @@
 #define MODE_FILE	"/opt/stonesoup/etc/mode"
 #define WHITELISTING	1
 #define BLACKLISTING	2
-#define WHITE_SENSITIVE	3
+#define SENSITIVE		3
 #define	BLACK_SENSITIVE	4
 #define MODE_MAX_NUM	4
-
 
 using namespace llvm;
 using namespace deps;
@@ -49,6 +48,7 @@ class InfoAppPass : public ModulePass {
 
     void runOnModuleWhitelisting(Module &M);
     void runOnModuleBlacklisting(Module &M);
+    void runOnModuleSensitive(Module &M);
 
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.
@@ -64,6 +64,9 @@ class InfoAppPass : public ModulePass {
 									 InfoflowSolution* fsoln,
 									 CallInst* srcCI);
 
+	void backwardSlicingSensitive(Module &M,
+								  InfoflowSolution* fsoln,
+								  CallInst* srcCI);
 	InfoflowSolution *forwardSlicingBlacklisting(CallInst *ci,
 												 const CallTaintEntry *entry,
 												 uint64_t id);
@@ -81,8 +84,6 @@ class InfoAppPass : public ModulePass {
 	bool chk_report_all(std::string s);
 	bool chk_report_arithm(std::string s);
 	bool chk_report_shl(std::string s);
-	void dbg_err(std::string s);
-	void dbg_msg(std::string s, std::string b);
     bool checkBackwardTainted(Value &V,
 							  InfoflowSolution* soln,
 							  bool direct=true);
@@ -108,6 +109,8 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
+void dbg_err(std::string s);
+void dbg_msg(std::string s, std::string b);
 }  // nameapce
 
 #endif

@@ -45,6 +45,13 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 	{ 0,                TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
 
+static const struct CallTaintEntry sensSourceSummaries[] = {
+	// function  tainted values   tainted direct memory tainted root ptrs
+	{ "malloc",   TAINTS_RETURN_VAL,  TAINTS_ALL_ARGS,      TAINTS_NOTHING },
+	{ "calloc",   TAINTS_RETURN_VAL,  TAINTS_ALL_ARGS,      TAINTS_NOTHING },
+	{ "realloc",  TAINTS_RETURN_VAL,  TAINTS_ALL_ARGS,      TAINTS_NOTHING },
+	{ 0,          TAINTS_NOTHING,     TAINTS_NOTHING,    	TAINTS_NOTHING }
+};
 
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
 
@@ -63,17 +70,18 @@ InfoAppPass::doInitializationAndRun(Module &M)
 		dbg_err("BlackListing");
 		runOnModuleBlacklisting(M);
 	}
-	else if (mode == WHITE_SENSITIVE) {
-		/* TODO: to be added */
-		;
+	else if (mode == SENSITIVE) {
+		dbg_err("Sensitive");
+		runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
 		/* TODO: to be added */
 		;
 	}
 	else
-		/* paranoia */
 		exit(mode);
+	
+	doFinalization();
 }
 
 void
@@ -87,9 +95,7 @@ InfoAppPass::doFinalization() {
 		raw_string_ostream rs(output);
 		if (xi->second) {
 			format_ioc_report_func(xi->first, rs);
-			errs() << "[InfoApp]xformMap:" << xi->second << ":";
-			errs() << rs.str();
-			errs() << "\n";
+			dbg_msg("[InfoApp]xformMap:", xi->second + ":" + rs.str());
 		}
 	}
 	
@@ -175,6 +181,126 @@ InfoAppPass::callTaintSetTainted(std::string srcKind,
 }
 
 
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  runOnModuleSensitive
+ *    Arguments:  @M - The source code module
+ *  Description:  Implements InfoAppPass For Sensitive Sinks.
+ *  		      Removes the checks from every operation unless this 
+ *  			  operation is identified as untrusted and its result is
+ *  			  used in a sensitive sink. Sources are identified after
+ *  			  forward (implemented here) and backward slicing (implemented
+ *  			  in trackSinks). Untrusted sources are defined at 
+ *  			  bLstSourceSummaries.
+ * ============================================================================
+ */
+void
+InfoAppPass::runOnModuleSensitive(Module &M)
+{
+	//assigning unique IDs to each overflow locations.
+	uint64_t unique_id = 0;
+	Function *func;
+	//InfoflowSolution *fsoln;
+
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		removeChecksForFunction(F, M);
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSourceSummaries,
+											 func->getName());
+					if (entry->Name)
+						dbg_err(entry->Name);
+					unique_id++;
+
+					if (chk_report_all_but_conv(func->getName())) {
+#if 0
+						//check for arg. count
+						assert(ci->getNumOperands() == 8);
+						
+						std::stringstream ss;
+						ss << ci->getNumOperands();
+						
+						dbg_msg("numOper:", ss.str());
+						dbg_msg("func_name:", func->getName());
+						
+						std::string sinkKind = getsinkKind(&unique_id);
+						InfoflowSolution* soln = 
+							untaint_all_but_conv(sinkKind, ci);
+						
+						//check for simple const. assignment
+						//getting valeMap
+						std::set<const Value *> vMap;
+						soln->getValueMap(vMap);
+
+						if(isConstAssign(vMap)) {
+							//replace it for simple const. assignment
+							dbg_err("isConstAssign0:true");
+							xformMap[ci] = true;
+						} else {
+							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+						}
+
+						if (xformMap[ci]) {
+							setWrapper(ci, M, func);
+							//if (theofilos(M, ci) ) {
+						}
+					} else if (func->getName() == "__ioc_report_conversion") {
+						//check for arg. count
+						assert(ci->getNumOperands() == 10);
+
+#ifdef __DBG__
+						uint32_t line = getIntFromVal(ci->getOperand(0));
+						uint32_t col  = getIntFromVal(ci->getOperand(1));
+
+						if (line != DBG_LINE || col != DBG_COL)
+							continue;
+#endif
+
+						std::string sinkKind = getsinkKind(&unique_id);
+						InfoflowSolution* soln = untaint_conv(sinkKind, ci);
+
+						//check for simple const. assignment
+						std::set<const Value *> vMap;
+						soln->getValueMap(vMap);
+
+						if(isConstAssign(vMap))
+						{
+							//replace it for simple const. assignment
+							dbg_err("isConstAssign1:true");
+							xformMap[ci] = true;
+
+						} else {
+							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+						}
+
+						if (xformMap[ci]) {
+							//theofilos check 
+							setWrapper(ci, M, func);
+						}
+
+					}  else if ((func->getName() == "div")   ||
+								(func->getName() == "ldiv")  ||
+								(func->getName() == "lldiv") ||
+								(func->getName() == "iconv")) {
+						/* these need to be handled anyway */
+						setWrapper(ci, M, func);
+#endif
+					}
+				}
+			} /* for-loops close here*/
+		}
+	}
+	/* now xformMap holds all the information  */
+	removeBenignChecks(M);
+}
 
 /*
  * ===  FUNCTION  =============================================================
@@ -265,7 +391,6 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 	}
 	/* now xformMap holds all the information  */
 	removeBenignChecks(M);
-	doFinalization();
 }
 
 
@@ -283,7 +408,6 @@ InfoAppPass::removeBenignChecks(Module &M)
 {
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		dbg_msg("DBG0:fname:", F.getName());
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -323,8 +447,8 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 							assert(ci->getNumOperands() == 10);
 							
 							//this returns all sources that are tainted
-							std::string sinkKind = getsinkKind(&unique_id);
-							InfoflowSolution* soln = untaint_conv(sinkKind, ci);
+							std::string sinkKind   = getsinkKind(&unique_id);
+							InfoflowSolution *soln = untaint_conv(sinkKind, ci);
 
 							//check if source is in our list
 							if (checkBackwardTainted(*srcCI, soln))
@@ -336,8 +460,8 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 						if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
 							checkForwardTainted(*(ci->getOperand(5)), fsoln)) {
 							
-							std::string sinkKind = getsinkKind(&unique_id);
-							InfoflowSolution* soln = 
+							std::string sinkKind   = getsinkKind(&unique_id);
+							InfoflowSolution *soln =
 								untaint_all_but_conv(sinkKind, ci);
 							
 							/* check if srcCI is backward tainted */
@@ -404,7 +528,7 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 		Function& F = *mi;
 		//XXX: implement something here ..
 
-		errs() << "DBG0:fname:" << F.getName() << "\n";
+		dbg_msg("DBG0:fname:", F.getName());
 		removeChecksForFunction(F, M);
 
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -471,7 +595,6 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 						InfoflowSolution* soln = untaint_conv(sinkKind, ci);
 
 						//check for simple const. assignment
-						//getting valeMap
 						std::set<const Value *> vMap;
 						soln->getValueMap(vMap);
 
@@ -500,7 +623,6 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 			}
 		}
 	}
-	doFinalization();
 }
 
 bool
@@ -755,19 +877,18 @@ InfoAppPass::getMode() {
 	std::string tmp;
 	ifmode.open(MODE_FILE);
 	if (!ifmode.is_open()) {
-		errs() << "Failed to open mode file.\n";
+		dbg_err("Failed to open mode file");
 		exit(1);
 	}
 	ifmode >> tmp;
 	mode = (unsigned char) atoi(tmp.c_str());
-	errs() << mode << "\n";
 	ifmode >> tmp;
 	if (ifmode.good()) {
-		errs() << "Mode File contains more than 1 number\n";
+		dbg_err("Mode File contains more than 1 number");
 		exit(1);
 	}
 	if (mode < 1 || mode > MODE_MAX_NUM) {
-		errs() << "Wrong mode number\n";
+		dbg_err("Wrong mode number");
 		exit(1);
 	}
 }
@@ -801,12 +922,12 @@ class StaticInitializer {
 			char* passend = getenv("__PASSEND__");
 
 			if (passend) {
-				errs() << "== EP_LoopOptimizerEnd ==\n";
+				dbg_err("== EP_LoopOptimizerEnd ==");
 				RegisterStandardPasses
 				RegisterInfoAppPass(PassManagerBuilder::EP_LoopOptimizerEnd,
 							registerInfoAppPasses);
 			} else {
-				errs() << "== EP_ModuleOptimizerEarly\n ==";
+				dbg_err("== EP_ModuleOptimizerEarly ==");
 				RegisterStandardPasses
 				RegisterInfoAppPass(PassManagerBuilder::EP_ModuleOptimizerEarly,
 							registerInfoAppPasses);
@@ -819,7 +940,20 @@ class StaticInitializer {
 
 static StaticInitializer InitializeEverything;
 
+
+void
+dbg_err(std::string s)
+{
+	llvm::errs() << "[InfoApp] DBG:" << s << "\n";
 }
+
+void
+dbg_msg(std::string a, std::string b)
+{
+	llvm::errs() << "[InfoApp] DBG:" << a << b << "\n";
+}
+
+} /* end of namespace */
 
 
 static void
@@ -951,18 +1085,6 @@ InfoAppPass::chk_report_shl(std::string name)
 	return (name == "__ioc_report_shr_bitwidth" ||
 			name == "__ioc_report_shl_bitwidth" ||
 			name == "__ioc_report_shl_strict");
-}
-
-void
-InfoAppPass::dbg_err(std::string s)
-{
-	DEBUG(errs() << "[InfoApp] " << s << "\n");
-}
-
-void
-InfoAppPass::dbg_msg(std::string a, std::string b)
-{
-	DEBUG(errs() << "[InfoApp] " << a << b << "\n");
 }
 
 void
