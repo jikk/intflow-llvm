@@ -98,8 +98,7 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	else
 		exit(mode);
 	
-	//FIXME format_ioc_output currently fails
-	//doFinalization();
+	doFinalization();
 }
 
 void
@@ -388,7 +387,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-	//	removeChecksForFunction(F, M);
+		removeChecksForFunction(F, M);
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -396,6 +395,9 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
 
 					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
@@ -425,7 +427,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							xformMap[ci] = true;
 
 						} else {
-							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+							trackSoln(M, soln, ci, sinkKind);
 						}
 					} else if ((func->getName() == "div")   ||
 							   (func->getName() == "ldiv")  ||
@@ -735,10 +737,6 @@ InfoAppPass::trackSoln(Module &M,
 	//need optimization or parallelization
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		
-		//FIXME why is this here??
-		//if (F.getName() != (sinkCI->getParent()->getParent()->getName()))
-		//	continue;
 		
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
@@ -1187,6 +1185,9 @@ InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 {
 	const CallInst* ci = dyn_cast<CallInst>(val);
 	assert(ci && "CallInst casting check");
+
+	if (!xformMap[ci])
+		return;
 
 	const Function* func = ci->getCalledFunction();
 	assert(func && "Function casting check");
