@@ -69,10 +69,6 @@ class InfoAppPass : public ModulePass {
 									 InfoflowSolution* fsoln,
 									 CallInst* srcCI);
 
-	void backwardSlicingSensitive(Module &M,
-								  InfoflowSolution* fsoln,
-								  CallInst* srcCI);
-
 	void taintForward(std::string s,
 					  CallInst *ci,
 					  const CallTaintEntry *entry);

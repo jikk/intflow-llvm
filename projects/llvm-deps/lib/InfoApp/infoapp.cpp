@@ -47,13 +47,29 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 
 static const struct CallTaintEntry sensSinkSummaries[] = {
 	// function  tainted values   tainted direct memory tainted root ptrs
-	{ "malloc",   TAINTS_ARG_1,  TAINTS_NOTHING,      TAINTS_NOTHING },
-	{ "calloc",   TAINTS_RETURN_VAL,  TAINTS_ALL_ARGS,      TAINTS_NOTHING },
-	{ "realloc",  TAINTS_RETURN_VAL,  TAINTS_ALL_ARGS,      TAINTS_NOTHING },
-	{ 0,          TAINTS_NOTHING,     TAINTS_NOTHING,    	TAINTS_NOTHING }
+	{ "malloc",   	TAINTS_ARG_1,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "realloc", TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ 0,          TAINTS_NOTHING,	TAINTS_NOTHING,		TAINTS_NOTHING }
 };
 
 CallTaintEntry nothing = { 0, TAINTS_NOTHING, TAINTS_NOTHING, TAINTS_NOTHING };
+
+
+
+
+/* ****************************************************************************
+ * ============================================================================
+ *  				    Pass Initialization & Fin Functions
+ * ============================================================================
+ * ****************************************************************************/
+
+bool
+InfoAppPass::runOnModule(Module &M)
+{
+	doInitializationAndRun(M);
+	return false;
+}
 
 void
 InfoAppPass::doInitializationAndRun(Module &M)
@@ -82,7 +98,8 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	else
 		exit(mode);
 	
-//	doFinalization();
+	//FIXME format_ioc_output currently fails
+	//doFinalization();
 }
 
 void
@@ -108,13 +125,11 @@ InfoAppPass::doFinalization() {
 	delete rmCheckList;
 }
 
-bool
-InfoAppPass::runOnModule(Module &M)
-{
-	doInitializationAndRun(M);
-	return false;
-}
-
+/* ****************************************************************************
+ * ============================================================================
+ *  						Taint Functions
+ * ============================================================================
+ * ****************************************************************************/
 
 //XXX: same function defined from SourceSinkAnalysis
 static const CallTaintEntry *
@@ -132,27 +147,6 @@ findEntryForFunction(const CallTaintEntry *Summaries,
 
 	// Return the default summary.
 	return &Summaries[Index];
-}
-
-
-/* TODO Flags as tainted whatever needs to be tainted and performs the forward
- * slicing*/
-InfoflowSolution *
-InfoAppPass::getForwardSol(std::string srcKind,
-								 CallInst *ci,
-								 const CallTaintEntry *entry)
-{
-	
-	//XXX Do not change order
-	taintForward(srcKind, ci, entry);
-	
-	std::set<std::string> kinds;
-	kinds.insert(srcKind);
-	
-	//This does forward analysis
-	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
-
-	return fsoln;
 }
 
 void
@@ -193,7 +187,7 @@ InfoAppPass::taintForward(std::string srcKind,
 }
 
 void
-InfoAppPass::taintBackwards(std::string srcKind,
+InfoAppPass::taintBackwards(std::string sinkKind,
 							CallInst *ci,
 							const CallTaintEntry *entry)
 {
@@ -203,405 +197,73 @@ InfoAppPass::taintBackwards(std::string srcKind,
 	
 	/* vsum */
 	if (vSum->TaintsReturnValue)
-		infoflow->setUntainted(srcKind, *ci);
+		infoflow->setUntainted(sinkKind, *ci);
 
 	for (unsigned ArgIndex = 0; ArgIndex < vSum->NumArguments; ++ArgIndex) {
 		if (vSum->TaintsArgument[ArgIndex])
-			infoflow->setUntainted(srcKind, *(ci->getOperand(ArgIndex)));
+			infoflow->setUntainted(sinkKind, *(ci->getOperand(ArgIndex)));
 	}
 
 	/* dsum */
 	if (dSum->TaintsReturnValue)
-		infoflow->setDirectPtrUntainted(srcKind, *ci);
+		infoflow->setDirectPtrUntainted(sinkKind, *ci);
 
 	for (unsigned ArgIndex = 0; ArgIndex < dSum->NumArguments; ++ArgIndex) {
 		if (dSum->TaintsArgument[ArgIndex])
-			infoflow->setDirectPtrUntainted(srcKind,
+			infoflow->setDirectPtrUntainted(sinkKind,
 											*(ci->getOperand(ArgIndex)));
 	}
 
 	/* rsum */
 	if (rSum->TaintsReturnValue)
-		infoflow->setReachPtrUntainted(srcKind, *ci);
+		infoflow->setReachPtrUntainted(sinkKind, *ci);
 
 	for (unsigned ArgIndex = 0; ArgIndex < rSum->NumArguments; ++ArgIndex) {
 		if (rSum->TaintsArgument[ArgIndex])
-			infoflow->setReachPtrUntainted(srcKind,
+			infoflow->setReachPtrUntainted(sinkKind,
 										   *(ci->getOperand(ArgIndex)));
 	}
 }
 
-/* 
- * ===  FUNCTION  =============================================================
- *         Name:  runOnModuleSensitive
- *    Arguments:  @M - The source code module
- *  Description:  Implements InfoAppPass For Sensitive Sinks.
- *  		      Removes the checks from every operation unless this 
- *  			  operation's result is used in a sensitive sink. Sinks are 
- *  			  identified after first implementing a forward analysis 
- *  			  and then a and backward slicing. 
- * ============================================================================
- */
-void
-InfoAppPass::runOnModuleSensitive(Module &M)
+bool
+InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 {
-	Function *func;
+	bool ret = (!soln->isTainted(V));
 
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-	//	removeChecksForFunction(F, M);
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					/*
-					 * Whatever is true does not get removed
-					 * */
-
-					func = ci->getCalledFunction();
-					const CallTaintEntry *entry =
-						findEntryForFunction(sensSinkSummaries,
-											 func->getName());
-					if (entry->Name) {
-						dbg_msg("sens: ", entry->Name);
-
-						unique_id++;
-						
-						std::stringstream SS;
-						std::set<std::string> kinds;
-
-						SS << unique_id++;
-						std::string sinkKind = entry->Name + SS.str();
-						kinds.insert(sinkKind);
-	
-						taintBackwards(sinkKind, ci, entry);
-						
-						InfoflowSolution* soln = 
-							infoflow->greatestSolution(kinds, false);
-						
-						std::set<const Value *> vMap;
-						soln->getValueMap(vMap);
-					
-						if(isConstAssign(vMap))
-						{
-							//replace it for simple const. assignment
-							DEBUG(errs() << "SENS CONST:true" << "\n");
-							xformMap[ci] = true;
-
-						} else {
-							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
-						}
-					}
-				}
-			} /* for-loops close here*/
-		}
-	}
-	removeBenignChecks(M);
-}
-
-/*
- * ===  FUNCTION  =============================================================
- *         Name:  forwardSlicingBlacklisting
- *  Description:  Implements forward slicing in blacking mode.
- *  			  Specifically it taints @src (which is already identified as
- *  			  untrusted) and finds all ioc_report_* functions that are
- *  			  using the tainted data.
- *    Arguments:  @src - the untrusted function specified by bLstSourceSummaries
- *    			  @entry - the CallTaintEntry that holds the necessary
- *    			  information about @src
- *    			  @id - the unique id of the @src
- * ============================================================================
- */
-InfoflowSolution *
-InfoAppPass::forwardSlicingBlacklisting (CallInst *ci,
-					 const CallTaintEntry *entry,
-					 uint64_t *id)
-{
-	std::string srcKind = getKindId("src", id);
-	return getForwardSol(srcKind, ci, entry);
-}
-/* -----  end of function forwardSlicingBlacklisting  ----- */
-
-
-/* 
- * ===  FUNCTION  =============================================================
- *         Name:  runOnModuleBlacklisting
- *    Arguments:  @M - The source code module
- *  Description:  Implements InfoAppPass Blacklisting. Removes the checks from
- *  		  every operation unless this operation is identified as
- *  		  untrusted after forward (implemented here) and backward slicing
- *  		  (implemented in trackSinks).
- *  		  Untrusted sources are defined at bLstSourceSummaries.
- *  		  It also uses the whitelist provided at WHITE_LIST in order to
- *  		  remove manually identified benign operations.
- * ============================================================================
- */
-void
-InfoAppPass::runOnModuleBlacklisting(Module &M)
-{
-	Function *func;
-	InfoflowSolution *fsoln;
-
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		dbg_msg("DBG0:fname:", F.getName());
-		//this is for whitelisting
-		removeChecksForFunction(F, M);
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					func = ci->getCalledFunction();
-					if (!func)
-						continue;
-					const CallTaintEntry *entry =
-						findEntryForFunction(bLstSourceSummaries,
-											 func->getName());
-					if (entry->Name) {
-#ifdef __DBG__
-						uint32_t line = getIntFromVal(ci->getOperand(0));
-						uint32_t col = getIntFromVal(ci->getOperand(1));
-						if (line != DBG_LINE || col != DBG_COL)
-							continue;
+	if (direct) {
+		ret = ret || (!soln->isDirectPtrTainted(V));
+#ifdef __REACH__
+		// XXX: not sure about Reachable pointer sets.
+		ret = || (!soln->isReachPtrTainted(V));
 #endif
-						//this returns whatever is tainted as a result of ci
-						fsoln = forwardSlicingBlacklisting(ci,
-														   entry,
-														   &unique_id);
-
-
-						backwardSlicingBlacklisting(M, fsoln, ci);
-					}  else if ((func->getName() == "div")   ||
-								(func->getName() == "ldiv")  ||
-								(func->getName() == "lldiv") ||
-								(func->getName() == "iconv")) {
-						/* these need to be handled anyway */
-						setWrapper(ci, M, func);
-					}
-				}
-			} /* for-loops close here*/
-		}
 	}
-	/* now xformMap holds all the information  */
-	removeBenignChecks(M);
+
+	return ret;
+}
+
+bool
+InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
+{
+	bool ret = (soln->isTainted(V));
+
+	if (direct) {
+		ret = ret || (soln->isDirectPtrTainted(V));
+#ifdef __REACH__
+		// XXX: not sure about Reachable pointer sets.
+		ret = || (soln->isReachPtrTainted(V));
+#endif
+	}
+
+	return ret;
 }
 
 
-/* 
- * ===  FUNCTION  =============================================================
- *         Name:  removeBenignChecks
- *    Arguments:  @M - the source code module
- *  Description:  Iterates over the module and checks how every call instruction
- *  			  If this instruction is noted as trusted (xformMap has a false
- *  			  value), then we remove the checks.
+
+/* ****************************************************************************
  * ============================================================================
- */
-void
-InfoAppPass::removeBenignChecks(Module &M)
-{
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					Function *func = ci->getCalledFunction();
-					if (ioc_report_all(func->getName()) && !xformMap[ci] ){
-						setWrapper(ci, M, func);
-					}
-				}
-			}
-		}
-	}
-}
-
-void
-InfoAppPass::backwardSlicingBlacklisting(Module &M,
-										InfoflowSolution* fsoln,
-										CallInst* srcCI)
-{
-	Function *func;
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		dbg_msg("DBG0:fname:", F.getName());
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					if (xformMap[ci])
-						continue;
-					
-					func = ci->getCalledFunction();
-					if (func->getName() == "__ioc_report_conversion") {
-						xformMap[ci] = false;
-						
-						// this checks if it is tainted
-						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
-							//check for arg. count
-							assert(ci->getNumOperands() == 10);
-							
-							//this returns all sources that are tainted
-							std::string sinkKind   = getKindId("conv",
-															   &unique_id);
-
-							InfoflowSolution *soln = getBackSolConv(sinkKind,
-																	ci);
-
-							//check if source is in our list
-							if (checkBackwardTainted(*srcCI, soln))
-								xformMap[ci] = true;
-						}
-					
-					} else if (ioc_report_all_but_conv(func->getName())) {
-						xformMap[ci] = false;
-						if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
-							checkForwardTainted(*(ci->getOperand(5)), fsoln)) {
-							
-							std::string sinkKind   = getKindId("arithm",
-															   &unique_id);
-							InfoflowSolution *soln =
-								getBackSolArithm(sinkKind, ci);
-							
-							/* check if srcCI is backward tainted */
-							if (checkBackwardTainted(*srcCI, soln))
-								xformMap[ci] = true;
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-/*FIXME refactor and merge with blacklisting*/
-void
-InfoAppPass::backwardSlicingSensitive(Module &M,
-									  InfoflowSolution* fsoln,
-									  CallInst* srcCI)
-{
-	Function *func;
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-					if (xformMap[ci])
-						continue;
-					
-					func = ci->getCalledFunction();
-					if (func->getName() == "__ioc_report_conversion") {
-						xformMap[ci] = false;
-						
-						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
-							//check for arg. count
-							assert(ci->getNumOperands() == 10);
-							
-							//this returns all sources that are tainted
-							std::string sinkKind   = getKindId("conv",
-															   &unique_id);
-							InfoflowSolution *soln = getBackSolConv(sinkKind,
-																	ci);
-
-							//check if source is in our list
-							if (checkBackwardTainted(*srcCI, soln))
-								xformMap[ci] = true;
-						}
-					
-					} else if (ioc_report_all_but_conv(func->getName())) {
-						xformMap[ci] = false;
-						if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
-							checkForwardTainted(*(ci->getOperand(5)), fsoln)) {
-							
-							std::string sinkKind   = getKindId("arithm",
-															   &unique_id);
-							InfoflowSolution *soln =
-								getBackSolArithm(sinkKind, ci);
-							
-							/* check if srcCI is backward tainted */
-							if (checkBackwardTainted(*srcCI, soln))
-								xformMap[ci] = true;
-								
-						}
-					}
-				}
-			}
-		}
-	}
-}
-/*
- * Helper Functions
- */
-std::string
-InfoAppPass::getKindId(std::string name, uint64_t *unique_id)
-{
-	std::stringstream SS;
-	SS << (*unique_id)++;
-	return name + SS.str();
-}
-
-
-InfoflowSolution *
-InfoAppPass::getForwSolArithm(std::string srcKind, CallInst *ci)
-{
-	Value* lval = ci->getOperand(4);
-	Value* rval = ci->getOperand(5);
-
-	//tagging lVal
-	infoflow->setTainted(srcKind, *lval);
-	
-	//tagging rVal
-	infoflow->setTainted(srcKind, *rval);
-
-	std::set<std::string> kinds;
-	kinds.insert(srcKind);
-	
-	return infoflow->leastSolution(kinds, false, true);
-}
-
-InfoflowSolution *
-InfoAppPass::getBackSolArithm(std::string sinkKind, CallInst *ci)
-{
-	Value* lval = ci->getOperand(4);
-	Value* rval = ci->getOperand(5);
-
-	//tagging lVal
-	infoflow->setUntainted(sinkKind, *lval);
-	
-	//tagging rVal
-	infoflow->setUntainted(sinkKind, *rval);
-
-	std::set<std::string> kinds;
-	kinds.insert(sinkKind);
-	
-	return infoflow->greatestSolution(kinds, false);
-}
-
-InfoflowSolution *
-InfoAppPass::getBackSolConv(std::string sinkKind, CallInst *ci)
-{
-	Value* val = ci->getOperand(7);
-	infoflow->setUntainted(sinkKind, *val);
-	
-	std::set<std::string> kinds;
-	kinds.insert(sinkKind);
-	
-	return infoflow->greatestSolution(kinds, false);
-}
-
-InfoflowSolution *
-InfoAppPass::getForwSolConv(std::string srcKind, CallInst *ci)
-{
-	Value* val = ci->getOperand(7);
-	infoflow->setTainted(srcKind, *val);
-	
-	std::set<std::string> kinds;
-	kinds.insert(srcKind);
-	
-	return infoflow->leastSolution(kinds, false, true);
-}
+ *  							IntFlow Modes
+ * ============================================================================
+ * ****************************************************************************/
 
 void
 InfoAppPass::runOnModuleWhitelisting(Module &M)
@@ -710,12 +372,353 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 
 /* 
  * ===  FUNCTION  =============================================================
+ *         Name:  runOnModuleSensitive
+ *    Arguments:  @M - The source code module
+ *  Description:  Implements InfoAppPass For Sensitive Sinks.
+ *  		      Removes the checks from every operation unless this 
+ *  			  operation's result is used in a sensitive sink. Sinks are 
+ *  			  identified after first implementing a forward analysis 
+ *  			  and then a and backward slicing. 
+ * ============================================================================
+ */
+void
+InfoAppPass::runOnModuleSensitive(Module &M)
+{
+	Function *func;
+
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+	//	removeChecksForFunction(F, M);
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSinkSummaries,
+											 func->getName());
+					if (entry->Name) {
+						dbg_msg("sens: ", entry->Name);
+
+						unique_id++;
+						
+						std::stringstream SS;
+						std::set<std::string> kinds;
+
+						SS << unique_id++;
+						std::string sinkKind = entry->Name + SS.str();
+						kinds.insert(sinkKind);
+	
+						taintBackwards(sinkKind, ci, entry);
+						
+						InfoflowSolution* soln = 
+							infoflow->greatestSolution(kinds, false);
+						
+						std::set<const Value *> vMap;
+						soln->getValueMap(vMap);
+					
+						if(isConstAssign(vMap))
+						{
+							dbg_err("sens-const");
+							xformMap[ci] = true;
+
+						} else {
+							xformMap[ci] = trackSoln(M, soln, ci, sinkKind);
+						}
+					} else if ((func->getName() == "div")   ||
+							   (func->getName() == "ldiv")  ||
+							   (func->getName() == "lldiv") ||
+							   (func->getName() == "iconv")) {
+						setWrapper(ci, M, func);
+					}
+				}
+			} /* for-loops close here*/
+		}
+	}
+	removeBenignChecks(M);
+}
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  runOnModuleBlacklisting
+ *    Arguments:  @M - The source code module
+ *  Description:  Implements InfoAppPass Blacklisting. Removes the checks from
+ *  		  every operation unless this operation is identified as
+ *  		  untrusted after forward (implemented here) and backward slicing
+ *  		  (implemented in trackSinks).
+ *  		  Untrusted sources are defined at bLstSourceSummaries.
+ *  		  It also uses the whitelist provided at WHITE_LIST in order to
+ *  		  remove manually identified benign operations.
+ * ============================================================================
+ */
+void
+InfoAppPass::runOnModuleBlacklisting(Module &M)
+{
+	Function *func;
+	InfoflowSolution *fsoln;
+
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		dbg_msg("DBG0:fname:", F.getName());
+		//this is for whitelisting
+		removeChecksForFunction(F, M);
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					const CallTaintEntry *entry =
+						findEntryForFunction(bLstSourceSummaries,
+											 func->getName());
+					if (entry->Name) {
+#ifdef __DBG__
+						uint32_t line = getIntFromVal(ci->getOperand(0));
+						uint32_t col = getIntFromVal(ci->getOperand(1));
+						if (line != DBG_LINE || col != DBG_COL)
+							continue;
+#endif
+						std::string srcKind = getKindId("src", &unique_id);
+						fsoln = getForwardSol(srcKind, ci, entry);
+
+						backwardSlicingBlacklisting(M, fsoln, ci);
+					}  else if ((func->getName() == "div")   ||
+								(func->getName() == "ldiv")  ||
+								(func->getName() == "lldiv") ||
+								(func->getName() == "iconv")) {
+						/* these need to be handled anyway */
+						setWrapper(ci, M, func);
+					}
+				}
+			} /* for-loops close here*/
+		}
+	}
+	/* now xformMap holds all the information  */
+	removeBenignChecks(M);
+}
+
+void
+InfoAppPass::backwardSlicingBlacklisting(Module &M,
+										InfoflowSolution* fsoln,
+										CallInst* srcCI)
+{
+	Function *func;
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		dbg_msg("DBG0:fname:", F.getName());
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					if (xformMap[ci])
+						continue;
+					
+					func = ci->getCalledFunction();
+					if (func->getName() == "__ioc_report_conversion") {
+						xformMap[ci] = false;
+						
+						// this checks if it is tainted
+						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
+							//check for arg. count
+							assert(ci->getNumOperands() == 10);
+							
+							//this returns all sources that are tainted
+							std::string sinkKind   = getKindId("conv",
+															   &unique_id);
+
+							InfoflowSolution *soln = getBackSolConv(sinkKind,
+																	ci);
+
+							//check if source is in our list
+							if (checkBackwardTainted(*srcCI, soln))
+								xformMap[ci] = true;
+						}
+					
+					} else if (ioc_report_all_but_conv(func->getName())) {
+						xformMap[ci] = false;
+						if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
+							checkForwardTainted(*(ci->getOperand(5)), fsoln)) {
+							
+							std::string sinkKind   = getKindId("arithm",
+															   &unique_id);
+							InfoflowSolution *soln =
+								getBackSolArithm(sinkKind, ci);
+							
+							/* check if srcCI is backward tainted */
+							if (checkBackwardTainted(*srcCI, soln))
+								xformMap[ci] = true;
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+/* ****************************************************************************
+ * ============================================================================
+ *  					Functions Removing IOC stuff
+ * ============================================================================
+ * ****************************************************************************/
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  removeBenignChecks
+ *    Arguments:  @M - the source code module
+ *  Description:  Iterates over the module and checks how every call instruction
+ *  			  If this instruction is noted as trusted (xformMap has a false
+ *  			  value), then we remove the checks.
+ * ============================================================================
+ */
+void
+InfoAppPass::removeBenignChecks(Module &M)
+{
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					Function *func = ci->getCalledFunction();
+					if (ioc_report_all(func->getName()) && !xformMap[ci] ){
+						setWrapper(ci, M, func);
+					}
+				}
+			}
+		}
+	}
+}
+
+void
+InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
+	for (unsigned i=0; rmCheckList[i].func; i++) {
+		if (F.getName() == rmCheckList[i].func) {
+			for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+				BasicBlock& B = *bi;
+				for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+					if (CallInst* ci = dyn_cast<CallInst>(ii))
+						removeChecksInst(ci, i, M);
+				}
+			}
+		}
+	}
+}
+
+void
+InfoAppPass::removeChecksInst(CallInst *ci, unsigned int i, Module &M)
+{
+	Function* f = ci->getCalledFunction();
+	if (!f)
+		return;
+	
+	std::string fname = f->getName();
+	
+	if (
+		/* remove overflow */
+		(rmCheckList[i].overflow && ioc_report_arithm(fname)) 				||
+		/* remove conversion */
+		(rmCheckList[i].conversion && (fname == "__ioc_report_conversion")) ||
+		/* remove shift */
+		(rmCheckList[i].shift && ioc_report_shl(fname))) {
+			xformMap[ci] = true;
+			setWrapper(ci, M, f);
+	}
+}
+
+/* ****************************************************************************
+ * ============================================================================
+ *  						Solution Functions
+ * ============================================================================
+ * ****************************************************************************/
+
+InfoflowSolution *
+InfoAppPass::getForwardSol(std::string srcKind,
+								 CallInst *ci,
+								 const CallTaintEntry *entry)
+{
+	
+	//XXX Do not change order
+	taintForward(srcKind, ci, entry);
+	
+	std::set<std::string> kinds;
+	kinds.insert(srcKind);
+	
+	//This does forward analysis
+	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
+
+	return fsoln;
+}
+
+InfoflowSolution *
+InfoAppPass::getForwSolArithm(std::string srcKind, CallInst *ci)
+{
+	Value* lval = ci->getOperand(4);
+	Value* rval = ci->getOperand(5);
+
+	//tagging lVal
+	infoflow->setTainted(srcKind, *lval);
+	
+	//tagging rVal
+	infoflow->setTainted(srcKind, *rval);
+
+	std::set<std::string> kinds;
+	kinds.insert(srcKind);
+	
+	return infoflow->leastSolution(kinds, false, true);
+}
+
+InfoflowSolution *
+InfoAppPass::getBackSolArithm(std::string sinkKind, CallInst *ci)
+{
+	Value* lval = ci->getOperand(4);
+	Value* rval = ci->getOperand(5);
+
+	//tagging lVal
+	infoflow->setUntainted(sinkKind, *lval);
+	
+	//tagging rVal
+	infoflow->setUntainted(sinkKind, *rval);
+
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	return infoflow->greatestSolution(kinds, false);
+}
+
+InfoflowSolution *
+InfoAppPass::getBackSolConv(std::string sinkKind, CallInst *ci)
+{
+	Value* val = ci->getOperand(7);
+	infoflow->setUntainted(sinkKind, *val);
+	
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	return infoflow->greatestSolution(kinds, false);
+}
+
+InfoflowSolution *
+InfoAppPass::getForwSolConv(std::string srcKind, CallInst *ci)
+{
+	Value* val = ci->getOperand(7);
+	infoflow->setTainted(srcKind, *val);
+	
+	std::set<std::string> kinds;
+	kinds.insert(srcKind);
+	
+	return infoflow->leastSolution(kinds, false, true);
+}
+
+
+/* 
+ * ===  FUNCTION  =============================================================
  *         Name:  trackSoln
  *    Arguments:  @M - the source code module
- *    			TODO
- *  Description: checks first if each instruction in the solution is backward
- *  			tainted  and then checks if it is fowrard tainted and returns
- *  			true or false
+ *  Description:  TODO
  *  		
  * ============================================================================
  */
@@ -782,12 +785,10 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	//check for white-listing
 	const CallTaintEntry *entry = findEntryForFunction(wLstSourceSummaries,
 													   fname);
-	if (entry->Name) {
+	if (entry->Name && mode == WHITELISTING) {
 		dbg_msg("white-list:", fname);
 		std::string srcKind = "src0" + kind;
 
-		//trace-back to confirm infoflow with forward slicing
-		//explicit-flow and cutAfterSinks.
 		InfoflowSolution* fsoln = getForwardSol(srcKind, ci, entry);
 		
 		Function* sinkFunc = sinkCI->getCalledFunction();
@@ -813,16 +814,13 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 			}
 
 		} else {
-			//FIXME assertions mess with sensitive for the moment
-		//	assert(false && "not __ioc_report function");
+			assert(false && "not __ioc_report function");
 		}
 	}
 
-	//FIXME add a mode check in the if(entry->Name) below
-	//check for black-listing
 	entry = findEntryForFunction(bLstSourceSummaries, fname);
 
-	if (entry->Name) {
+	if (entry->Name && mode == BLACKLISTING) {
 		dbg_msg("black-list: ", fname);
 		std::string srcKind = "src1" + kind;
 		InfoflowSolution* fsoln = getForwardSol(srcKind, ci, entry);
@@ -848,11 +846,11 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 				dbg_err("checkForwardTainted:black1:false");
 			}
 		} else {
-		//	assert(false && "not __ioc_report function");
+			assert(false && "not __ioc_report function");
 		}
 	}
 
-	if (StringRef(fname).startswith("__ioc")) {
+	if (StringRef(fname).startswith("__ioc") && mode == SENSITIVE) {
 		if(fname == "__ioc_report_conversion") {
 			std::string srcKind = getKindId("sens-ioc",
 											 &unique_id);
@@ -861,7 +859,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 
 			if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
 				dbg_err("checkForwardTainted:sens0:true");
-				//tainted source detected! just get out
 				xformMap[ci] = true;
 				return true;
 			} else {
@@ -883,49 +880,18 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 				dbg_err("checkForwardTainted:sens1:false");
 			}
 		} else {
-			//	assert(false && "not __ioc_report function");
+			assert(false && "not sensitive function");
 		}
 	}
 	
 	return ret;
 }
 
-/*
- *XXX for forward slicing, you taint stuff, for back, you untaint
- * */
-
-//TODO documentation: check if the soln is tainted
-bool
-InfoAppPass::checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct)
-{
-	bool ret = (!soln->isTainted(V));
-
-	if (direct) {
-		ret = ret || (!soln->isDirectPtrTainted(V));
-#ifdef __REACH__
-		// XXX: not sure about Reachable pointer sets.
-		ret = || (!soln->isReachPtrTainted(V));
-#endif
-	}
-
-	return ret;
-}
-
-bool
-InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
-{
-	bool ret = (soln->isTainted(V));
-
-	if (direct) {
-		ret = ret || (soln->isDirectPtrTainted(V));
-#ifdef __REACH__
-		// XXX: not sure about Reachable pointer sets.
-		ret = || (soln->isReachPtrTainted(V));
-#endif
-	}
-
-	return ret;
-}
+/* ****************************************************************************
+ * ============================================================================
+ *  								CHECKS
+ * ============================================================================
+ * ****************************************************************************/
 
 bool
 InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
@@ -953,42 +919,51 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
 	return true;
 }
 
-/*This removes whatever is in rmCh...*/
-void
-InfoAppPass::removeChecksForFunction(Function& F, Module& M) {
-	for (unsigned i=0; rmCheckList[i].func; i++) {
-		if (F.getName() == rmCheckList[i].func) {
-			for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-				BasicBlock& B = *bi;
-				for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-					if (CallInst* ci = dyn_cast<CallInst>(ii))
-						removeChecksInst(ci, i, M);
-				}
-			}
-		}
-	}
+bool
+InfoAppPass::ioc_report_all_but_conv(std::string name)
+{
+	return (name == "__ioc_report_add_overflow" ||
+			name == "__ioc_report_sub_overflow" ||
+			name == "__ioc_report_mul_overflow" ||
+			name == "__ioc_report_shr_bitwidth" ||
+			name == "__ioc_report_shl_bitwidth" ||
+			name == "__ioc_report_shl_strict");
 }
 
-void
-InfoAppPass::removeChecksInst(CallInst *ci, unsigned int i, Module &M)
+bool
+InfoAppPass::ioc_report_all(std::string name)
 {
-	Function* f = ci->getCalledFunction();
-	if (!f)
-		return;
-	
-	std::string fname = f->getName();
-	
-	if (
-		/* remove overflow */
-		(rmCheckList[i].overflow && ioc_report_arithm(fname)) 				||
-		/* remove conversion */
-		(rmCheckList[i].conversion && (fname == "__ioc_report_conversion")) ||
-		/* remove shift */
-		(rmCheckList[i].shift && ioc_report_shl(fname))) {
-			xformMap[ci] = true;
-			setWrapper(ci, M, f);
-	}
+	return (name == "__ioc_report_add_overflow" ||
+			name == "__ioc_report_sub_overflow" ||
+			name == "__ioc_report_mul_overflow" ||
+			name == "__ioc_report_shr_bitwidth" ||
+			name == "__ioc_report_shl_bitwidth" ||
+			name == "__ioc_report_shl_strict"	||
+			name == "__ioc_report_conversion");
 }
+
+bool
+InfoAppPass::ioc_report_arithm(std::string name)
+{
+	return (name == "__ioc_report_add_overflow" ||
+			name == "__ioc_report_sub_overflow" ||
+			name == "__ioc_report_mul_overflow");
+}
+
+bool
+InfoAppPass::ioc_report_shl(std::string name)
+{
+	return (name == "__ioc_report_shr_bitwidth" ||
+			name == "__ioc_report_shl_bitwidth" ||
+			name == "__ioc_report_shl_strict");
+}
+
+
+/* ****************************************************************************
+ * ============================================================================
+ *  							HELPER FUNCTIONS 
+ * ============================================================================
+ * ****************************************************************************/
 
 uint64_t
 InfoAppPass::getIntFromVal(Value* val)
@@ -1010,6 +985,18 @@ InfoAppPass::getStringFromVal(Value* val, std::string& output)
 	if (array->isCString())
 		output = array->getAsCString();
 }
+
+/*
+ * Helper Functions
+ */
+std::string
+InfoAppPass::getKindId(std::string name, uint64_t *unique_id)
+{
+	std::stringstream SS;
+	SS << (*unique_id)++;
+	return name + SS.str();
+}
+
 
 /* 
  * ===  FUNCTION  =============================================================
@@ -1195,45 +1182,6 @@ InfoAppPass::setWrapper(CallInst *ci, Module &M, Function *func)
 /*
  * Print Helpers
  */
-bool
-InfoAppPass::ioc_report_all_but_conv(std::string name)
-{
-	return (name == "__ioc_report_add_overflow" ||
-			name == "__ioc_report_sub_overflow" ||
-			name == "__ioc_report_mul_overflow" ||
-			name == "__ioc_report_shr_bitwidth" ||
-			name == "__ioc_report_shl_bitwidth" ||
-			name == "__ioc_report_shl_strict");
-}
-
-bool
-InfoAppPass::ioc_report_all(std::string name)
-{
-	return (name == "__ioc_report_add_overflow" ||
-			name == "__ioc_report_sub_overflow" ||
-			name == "__ioc_report_mul_overflow" ||
-			name == "__ioc_report_shr_bitwidth" ||
-			name == "__ioc_report_shl_bitwidth" ||
-			name == "__ioc_report_shl_strict"	||
-			name == "__ioc_report_conversion");
-}
-
-bool
-InfoAppPass::ioc_report_arithm(std::string name)
-{
-	return (name == "__ioc_report_add_overflow" ||
-			name == "__ioc_report_sub_overflow" ||
-			name == "__ioc_report_mul_overflow");
-}
-
-bool
-InfoAppPass::ioc_report_shl(std::string name)
-{
-	return (name == "__ioc_report_shr_bitwidth" ||
-			name == "__ioc_report_shl_bitwidth" ||
-			name == "__ioc_report_shl_strict");
-}
-
 void
 InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 {
