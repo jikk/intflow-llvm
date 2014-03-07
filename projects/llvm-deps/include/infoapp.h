@@ -38,6 +38,7 @@ class InfoAppPass : public ModulePass {
 
   private:
     Infoflow* infoflow;
+	uint64_t unique_id;
     DenseMap<const Value*, bool> xformMap;
     std::set<StringRef> whiteSet;
     std::set<StringRef> blackSet;
@@ -59,7 +60,11 @@ class InfoAppPass : public ModulePass {
 				   InfoflowSolution* soln,
 				   CallInst* sinkCI,
 				   std::string& kinds);
-	bool trackSolnInst(CallInst *i, Module &M, CallInst *ci, std::string& s);
+	bool trackSolnInst(CallInst *i,
+					   Module &M,
+					   CallInst *ci,
+					   InfoflowSolution* soln,
+					   std::string& s);
 	void backwardSlicingBlacklisting(Module &M,
 									 InfoflowSolution* fsoln,
 									 CallInst* srcCI);
@@ -67,37 +72,54 @@ class InfoAppPass : public ModulePass {
 	void backwardSlicingSensitive(Module &M,
 								  InfoflowSolution* fsoln,
 								  CallInst* srcCI);
+
+	void taintForward(std::string s,
+					  CallInst *ci,
+					  const CallTaintEntry *entry);
+	
+	void taintBackwards(std::string s,
+						CallInst *ci,
+						const CallTaintEntry *entry);
+
 	InfoflowSolution *forwardSlicingBlacklisting(CallInst *ci,
 												 const CallTaintEntry *entry,
-												 uint64_t id);
+												 uint64_t *id);
 
-	InfoflowSolution *callTaintSetTainted(std::string s,
+	InfoflowSolution *getForwardSol(std::string s,
 										  CallInst *ci,
 										  const CallTaintEntry *entry);
-
-	InfoflowSolution *untaint_all_but_conv(std::string s, CallInst *ci);
-	InfoflowSolution *untaint_conv(std::string s, CallInst *ci);
-	std::string getsinkKind(uint64_t *id);
-    void removeBenignChecks(Module &M);
+	InfoflowSolution *getBackSolArithm(std::string s, CallInst *ci);
+	InfoflowSolution *getForwSolArithm(std::string s, CallInst *ci);
+	InfoflowSolution *getForwSolConv(std::string s, CallInst *ci);
+	InfoflowSolution *getBackSolConv(std::string s, CallInst *ci);
+	
+    
+	void removeBenignChecks(Module &M);
+    void checkfTainted(Module &M, InfoflowSolution *f);
 	void setWrapper(CallInst *ci, Module &M, Function *f);
-	bool chk_report_all_but_conv(std::string s);
-	bool chk_report_all(std::string s);
-	bool chk_report_arithm(std::string s);
-	bool chk_report_shl(std::string s);
-    bool checkBackwardTainted(Value &V,
+	
+	bool ioc_report_all_but_conv(std::string s);
+	bool ioc_report_all(std::string s);
+	bool ioc_report_arithm(std::string s);
+	bool ioc_report_shl(std::string s);
+    
+	bool checkBackwardTainted(Value &V,
 							  InfoflowSolution* soln,
 							  bool direct=true);
     bool checkForwardTainted(Value &V,
 							 InfoflowSolution* soln,
 							 bool direct=true);
     bool isConstAssign(const std::set<const Value *> vMap);
-    void removeChecksForFunction(Function& F, Module& M);
+    
+	void removeChecksForFunction(Function& F, Module& M);
     void removeChecksInst(CallInst *i, unsigned int m, Module &M);
     void format_ioc_report_func(const Value* val, raw_string_ostream& rs);
-    uint64_t getIntFromVal(Value* val);
-    uint64_t getColFromVal(Value* val);
+    
     void getStringFromVal(Value* val, std::string& output);
     void getMode();
+	uint64_t getIntFromVal(Value* val);
+    uint64_t getColFromVal(Value* val);
+	std::string getKindId(std::string name, uint64_t *id);
 
 };  //class
   
