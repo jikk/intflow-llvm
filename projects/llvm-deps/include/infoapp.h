@@ -10,7 +10,10 @@
 
 #include "Infoflow.h"
 
+#include <algorithm>
+#include <map>
 #include <set>
+#include <vector>
 
 #define WHITE_LIST	"/opt/stonesoup/etc/whitelist.files"
 #define MODE_FILE	"/opt/stonesoup/etc/mode"
@@ -82,8 +85,11 @@ class InfoAppPass : public ModulePass {
 												 uint64_t *id);
 
 	InfoflowSolution *getForwardSol(std::string s,
-										  CallInst *ci,
-										  const CallTaintEntry *entry);
+									CallInst *ci,
+									const CallTaintEntry *entry);
+	InfoflowSolution *getBackwardsSol(std::string s,
+									  CallInst *ci,
+									  const CallTaintEntry *entry);
 	InfoflowSolution *getBackSolArithm(std::string s, CallInst *ci);
 	InfoflowSolution *getForwSolArithm(std::string s, CallInst *ci);
 	InfoflowSolution *getForwSolConv(std::string s, CallInst *ci);
@@ -127,8 +133,14 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
+typedef std::map <std::string, bool> iocPoint;
+typedef std::vector <iocPoint> iocPointVector;
+typedef std::map <std::string, iocPointVector > iocPointsForSens;
+
+iocPointsForSens iocPoints;
+
 void dbg_err(std::string s);
 void dbg_msg(std::string s, std::string b);
-}  // nameapce
+}  // namespace
 
 #endif

@@ -89,6 +89,7 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	}
 	else if (mode == SENSITIVE) {
 		dbg_err("Sensitive");
+
 		runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
@@ -404,29 +405,29 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					if (entry->Name) {
 						dbg_msg("sens: ", entry->Name);
 
-						unique_id++;
+						//find malloc basic block
+						BasicBlock *bb = ii->getParent();
+						dbg_msg("bb is", bb->getName());
 						
-						std::stringstream SS;
-						std::set<std::string> kinds;
+						//std::string sinkKind = getKindId(entry->Name,
+						//								 &unique_id);
 
-						SS << unique_id++;
-						std::string sinkKind = entry->Name + SS.str();
-						kinds.insert(sinkKind);
-	
-						taintBackwards(sinkKind, ci, entry);
-						
-						InfoflowSolution* soln = 
-							infoflow->greatestSolution(kinds, false);
-						
+						std::string sinkKind = bb->getName();
+						InfoflowSolution *soln = getBackwardsSol(sinkKind,
+																 ci,
+																 entry);
+
 						std::set<const Value *> vMap;
 						soln->getValueMap(vMap);
-					
+
 						if(isConstAssign(vMap))
 						{
+							/* we want to keep those */
 							dbg_err("sens-const");
 							xformMap[ci] = true;
 
 						} else {
+							iocPoints[sinkKind] = std::vector<iocPoint>();
 							trackSoln(M, soln, ci, sinkKind);
 						}
 					} else if ((func->getName() == "div")   ||
@@ -656,6 +657,23 @@ InfoAppPass::getForwardSol(std::string srcKind,
 }
 
 InfoflowSolution *
+InfoAppPass::getBackwardsSol(std::string sinkKind,
+							 CallInst *ci,
+							 const CallTaintEntry *entry)
+{
+	
+	//XXX Do not change order
+	taintBackwards(sinkKind, ci, entry);
+	
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	InfoflowSolution *fsoln = infoflow->greatestSolution(kinds, false);
+
+	return fsoln;
+}
+
+InfoflowSolution *
 InfoAppPass::getForwSolArithm(std::string srcKind, CallInst *ci)
 {
 	Value* lval = ci->getOperand(4);
@@ -741,7 +759,6 @@ InfoAppPass::trackSoln(Module &M,
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-				//instruction is tainted
 				if (checkBackwardTainted(*ii, soln)) {
 					DEBUG(ii->dump());
 
@@ -849,23 +866,71 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	}
 
 	if (StringRef(fname).startswith("__ioc") && mode == SENSITIVE) {
-		if(fname == "__ioc_report_conversion") {
-			std::string srcKind = getKindId("sens-ioc",
-											 &unique_id);
+		
+		//FIXME unique id for ioc src argument. This could be the BB?
+		std::string srcKind = getKindId("sens-ioc",
+										&unique_id);
 
+		
+		BasicBlock *ioc_bb = ci->getParent();
+		iocPoint p;
+		
+		if (iocPoints[kind].empty()) {
+			/* If not here, create and set to false */
+			p[ioc_bb->getName()] = false;
+			iocPoints[kind].push_back(p);
+		} else {
+			/* Else find re-set to false */
+			for (iocPointsForSens::const_iterator ioc_p = iocPoints.begin();
+				 ioc_p != iocPoints.end();
+				 ++ioc_p) {
+
+				iocPointVector ipv = ioc_p->second;
+				for(iocPointVector::const_iterator ivi = ipv.begin();
+					ivi != ipv.end();
+					++ivi) {
+					iocPoint point = *ivi;
+					dbg_msg("resetting ",
+							point.find(ioc_bb->getName())->first);
+					point[ioc_bb->getName()] = false;
+				}
+			}
+		}
+
+		/*
+		 * TODO
+		 *
+		 *
+		 * Store basic block name in IRa
+		 * insert function setting the map value to 1 in ioc_report
+		 * insert function setting the map value to 0 in other bb
+		 *
+		 * insert map to IR. In main 
+		 * insert function before malloc to check map values
+		 *
+		 *
+		 * in case of full despair the plan is:
+		 * we will keep an array containing the values of all ioc bb in every
+		 * basic block and just update the corresponding value. 
+		 */
+		if(fname == "__ioc_report_conversion") {
 			InfoflowSolution* fsoln = getForwSolConv(srcKind, ci);
 
 			if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
 				dbg_err("checkForwardTainted:sens0:true");
+				
+				//FIXME remove this
 				xformMap[ci] = true;
+
+				//create mvar, add it to the set for this particular malloc
+				//mvar = 1 inside the basic block
+				//mvar = 0 inside the next basic block, so that the same
+				//variable gets re-set if we don't go there.
 				return true;
 			} else {
 				dbg_err("checkForwardTainted:sens0:false");
 			}
 		} else if (ioc_report_all_but_conv(fname)) {
-			std::string srcKind = getKindId("sens-ioc",
-											 &unique_id);
-
 			InfoflowSolution* fsoln = getForwSolArithm(srcKind, ci);
 			
 			if (checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
