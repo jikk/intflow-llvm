@@ -282,7 +282,7 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 					Function* func = ci->getCalledFunction();
 					if (!func)
 						continue;
-
+					
 					if (ioc_report_all_but_conv(func->getName())) {
 #ifdef __DBG__
 						uint32_t line = getIntFromVal(ci->getOperand(0));
@@ -385,7 +385,10 @@ void
 InfoAppPass::runOnModuleSensitive(Module &M)
 {
 	Function *func;
+	uint64_t ioc_cnt  = 0;
+	uint64_t sens_cnt = 0;
 
+	//Do a first pass and gother info
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		removeChecksForFunction(F, M);
@@ -399,10 +402,20 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					if (!func)
 						continue;
 
+					if (ioc_report_all(func->getName())) {
+						//FIXME create a table globally
+						//ioc_id -> [bb_name]
+						//in the ioc, look for bb_name (can we do better?)
+						ioc_cnt++;
+						//BasicBlock *bb = ii->getParent();
+						//iocIdName[ioc_id] = bb->getName();
+					}
+
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
 					if (entry->Name) {
+						sens_cnt++;
 						dbg_msg("sens: ", entry->Name);
 
 						//find malloc basic block
@@ -429,6 +442,11 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						} else {
 							iocPoints[sinkKind] = std::vector<iocPoint>();
 							trackSoln(M, soln, ci, sinkKind);
+
+							//Now iocPoints contains false for each ioc block
+							//Create an array as global with name sinkKind
+							//and fill it up with the values (id, bool)
+							
 						}
 					} else if ((func->getName() == "div")   ||
 							   (func->getName() == "ldiv")  ||
@@ -440,6 +458,41 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 			} /* for-loops close here*/
 		}
 	}
+	
+	//FIXME refactor
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSinkSummaries,
+											 func->getName());
+					if (entry->Name) {
+						//find basic block of sens
+						BasicBlock *bb = ii->getParent();
+						std::string sinkKind = bb->getName();
+						
+						//do backward analysis
+						InfoflowSolution *soln = getBackwardsSol(sinkKind,
+																 ci,
+																 entry);
+
+						iocPoints[sinkKind] = std::vector<iocPoint>();
+						//do forward analysis
+						trackSoln(M, soln, ci, sinkKind);
+					}
+			} /* for-loops close here*/
+		}
+	}
+
 	removeBenignChecks(M);
 }
 
@@ -879,7 +932,10 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 			/* If not here, create and set to false */
 			p[ioc_bb->getName()] = false;
 			iocPoints[kind].push_back(p);
-		} else {
+		} 
+
+#if 0
+		else {
 			/* Else find re-set to false */
 			for (iocPointsForSens::const_iterator ioc_p = iocPoints.begin();
 				 ioc_p != iocPoints.end();
@@ -913,6 +969,7 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		 * we will keep an array containing the values of all ioc bb in every
 		 * basic block and just update the corresponding value. 
 		 */
+#endif
 		if(fname == "__ioc_report_conversion") {
 			InfoflowSolution* fsoln = getForwSolConv(srcKind, ci);
 

@@ -42,6 +42,8 @@ class InfoAppPass : public ModulePass {
   private:
     Infoflow* infoflow;
 	uint64_t unique_id;
+	uint64_t sens_id;
+	uint64_t ioc_id;
     DenseMap<const Value*, bool> xformMap;
     std::set<StringRef> whiteSet;
     std::set<StringRef> blackSet;
