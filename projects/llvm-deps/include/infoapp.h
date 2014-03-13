@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 #define WHITE_LIST	"/opt/stonesoup/etc/whitelist.files"
@@ -42,8 +43,7 @@ class InfoAppPass : public ModulePass {
   private:
     Infoflow* infoflow;
 	uint64_t unique_id;
-	uint64_t sens_id;
-	uint64_t ioc_id;
+	std::string *iocIdName;
     DenseMap<const Value*, bool> xformMap;
     std::set<StringRef> whiteSet;
     std::set<StringRef> blackSet;
