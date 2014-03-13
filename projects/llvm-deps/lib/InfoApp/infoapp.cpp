@@ -478,6 +478,12 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 
 					  test->setAlignment(4);
 
+  new GlobalVariable(M,
+				   ArrayType::get(IntegerType::get(M.getContext(), 8), 3),
+				   true,
+				   GlobalValue::InternalLinkage,
+				   ConstantDataArray::getString(M.getContext(), "as", true),
+				   "TEST");
 
 		//Add function to malloc
 		std::vector<Value *> args;
