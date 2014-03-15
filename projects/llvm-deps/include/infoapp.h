@@ -55,6 +55,7 @@ class InfoAppPass : public ModulePass {
     void runOnModuleWhitelisting(Module &M);
     void runOnModuleBlacklisting(Module &M);
     void runOnModuleSensitive(Module &M);
+    void runTest(Module &M);
 
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.

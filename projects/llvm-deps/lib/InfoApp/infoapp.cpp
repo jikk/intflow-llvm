@@ -92,8 +92,8 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	}
 	else if (mode == SENSITIVE) {
 		dbg_err("Sensitive");
-
-		runOnModuleSensitive(M);
+		runTest(M);
+		//runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
 		/* TODO: to be added */
@@ -102,7 +102,7 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	else
 		exit(mode);
 	
-	doFinalization();
+	//doFinalization();
 }
 
 void
@@ -373,6 +373,82 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 	}
 }
 
+void
+InfoAppPass::runTest(Module &M)
+{
+	Function *func;
+	uint64_t ioc_cnt  = 0;
+	iplist<GlobalVariable>::iterator gvIt;
+	//Do a first pass and count ioc and sens entries
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSinkSummaries,
+											 func->getName());
+					if (entry->Name) {
+						
+						//find basic block of sensitive
+						BasicBlock *bb = ii->getParent();
+						std::string sinkKind = bb->getName();
+						
+						/* Initialize malloc array */
+						PointerType* intPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+
+						GlobalVariable* iocArray = new GlobalVariable(/*Module=*/M, 
+																	  /*Type=*/intPtr,
+																	  /*isConstant=*/false,
+																	  /*Linkage=*/GlobalValue::ExternalLinkage,
+																	  /*Initializer=*/0, // has initializer, specified below
+																	  /*Name=*/"__gl_ioc_malloc_" + sinkKind);
+						iocArray->setAlignment(8);
+						ConstantPointerNull* emptyIntPtr = ConstantPointerNull::get(intPtr);
+						iocArray->setInitializer(emptyIntPtr);
+						
+#if 0		
+						std::vector<Type*>iocArrayArgs;
+						iocArrayArgs.push_back(IntegerType::get(M.getContext(), 32));
+						FunctionType* iocAllocType = FunctionType::get(
+										/*Result=*/Type::getVoidTy(M.getContext()),
+										/*Params=*/iocArrayArgs,
+										/*isVarArg=*/false);
+
+#endif
+		for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
+			if (gvIt->getName().str() != "")
+			 dbg_msg("GLOBAL:", gvIt->getName().str());
+
+		Function *f;
+		Instruction *injIns;
+
+		//argument just needed for string
+		Constant *fc = M.getOrInsertFunction("checkIoc", //name
+                        Type::getVoidTy(M.getContext()), //type
+ 						Type::getInt32Ty(M.getContext()),//position variable
+  			/*Linkage=*/GlobalValue::ExternalLinkage,
+                        (Type *)0);
+ 		std::vector<Value *> args;
+		args.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+		
+		f = cast<Function>(fc);
+		ArrayRef<Value *> functionArguments(args);
+        injIns = CallInst::Create(f, functionArguments, "");
+        ci->getParent()->getInstList().insert(ci, injIns);
+					}
+				} 
+			}
+		}
+	}
+}
 /* 
  * ===  FUNCTION  =============================================================
  *         Name:  runOnModuleSensitive
@@ -466,24 +542,6 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							xformMap[ci] = true;
 
 						} else {
-
-						GlobalVariable *test =
-								new GlobalVariable(M, 				//Module
-   ArrayType::get(IntegerType::get(M.getContext(), 8), ioc_cnt),	//Type
-					   false,										//Constant
-					   GlobalValue::PrivateLinkage,					//Linkage
-					   0,										//Initializer
-					   "testblah");								//Name
-
-
-					  test->setAlignment(4);
-
-  new GlobalVariable(M,
-				   ArrayType::get(IntegerType::get(M.getContext(), 8), 3),
-				   true,
-				   GlobalValue::InternalLinkage,
-				   ConstantDataArray::getString(M.getContext(), "as", true),
-				   "TEST");
 
 		//Add function to malloc
 		std::vector<Value *> args;
