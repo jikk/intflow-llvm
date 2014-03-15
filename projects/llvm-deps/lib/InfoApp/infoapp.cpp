@@ -376,6 +376,7 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 void
 InfoAppPass::runTest(Module &M)
 {
+	uint64_t arr_n = 5;
 	Function *func;
 	uint64_t ioc_cnt  = 0;
 	iplist<GlobalVariable>::iterator gvIt;
@@ -402,7 +403,8 @@ InfoAppPass::runTest(Module &M)
 						std::string sinkKind = bb->getName();
 						
 						/* Initialize malloc array */
-						PointerType* intPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+						//FIXME replace with ioc_cnt
+						ArrayType* intPtr = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
 
 						GlobalVariable* iocArray = new GlobalVariable(/*Module=*/M, 
 																	  /*Type=*/intPtr,
@@ -411,28 +413,40 @@ InfoAppPass::runTest(Module &M)
 																	  /*Initializer=*/0, // has initializer, specified below
 																	  /*Name=*/"__gl_ioc_malloc_" + sinkKind);
 						iocArray->setAlignment(8);
-						ConstantPointerNull* emptyIntPtr = ConstantPointerNull::get(intPtr);
-						iocArray->setInitializer(emptyIntPtr);
+						std::vector<Constant*> Initializer;
+						Initializer.reserve(arr_n);
+						Constant* zero = ConstantInt::get(IntegerType::get(M.getContext(), 32), 0);
 						
-#if 0		
-						std::vector<Type*>iocArrayArgs;
-						iocArrayArgs.push_back(IntegerType::get(M.getContext(), 32));
-						FunctionType* iocAllocType = FunctionType::get(
-										/*Result=*/Type::getVoidTy(M.getContext()),
-										/*Params=*/iocArrayArgs,
-										/*isVarArg=*/false);
-
-#endif
+						for (uint64_t i = 0; i < arr_n; i++) {
+							Initializer[i++] = zero; 
+						}
+						
+						ArrayType *ATy = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
+						Constant *initAr = llvm::ConstantArray::get(ATy, Initializer); 
+						iocArray->setInitializer(initAr);
+						
 		for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
-			if (gvIt->getName().str() != "")
-			 dbg_msg("GLOBAL:", gvIt->getName().str());
+			if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind) {
+				dbg_msg("GLOBAL:", gvIt->getName().str());
+				GlobalVariable *tmpgl = gvIt;
+				//std::vector index_vector;
+				//index_vector.push_back( ConstantSInt::get( ATy, 0 );
+
+				GetElementPtrInst *gep = new GetElementPtrInst(tmpgl, ArrayRef <GlobalVariable *>tmpgl);
+#if 0
+				std::vector<Constant*>IndicesC(arr_n);
+				Constant* ptrgl = ConstantExpr::getGetElementPtr(tmpgl, 
+																 IndicesC[0],
+																 IndicesC.size());
+#endif
+		}
 
 		Function *f;
 		Instruction *injIns;
 
 		//argument just needed for string
 		Constant *fc = M.getOrInsertFunction("checkIoc", //name
-                        Type::getVoidTy(M.getContext()), //type
+                        Type::getInt32Ty(M.getContext()), //function type
  						Type::getInt32Ty(M.getContext()),//position variable
   			/*Linkage=*/GlobalValue::ExternalLinkage,
                         (Type *)0);
