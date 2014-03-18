@@ -377,8 +377,8 @@ void
 InfoAppPass::runTest(Module &M)
 {
 	uint64_t arr_n = 5;
+	uint64_t ioc_cnt = 1;
 	Function *func;
-	uint64_t ioc_cnt  = 0;
 	iplist<GlobalVariable>::iterator gvIt;
 	//Do a first pass and count ioc and sens entries
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
@@ -392,16 +392,16 @@ InfoAppPass::runTest(Module &M)
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
-					
+
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
 					if (entry->Name) {
-						
+
 						//find basic block of sensitive
 						BasicBlock *bb = ii->getParent();
 						std::string sinkKind = bb->getName();
-						
+
 						/* Initialize malloc array */
 						//FIXME replace with ioc_cnt
 						ArrayType* intPtr = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
@@ -416,47 +416,134 @@ InfoAppPass::runTest(Module &M)
 						std::vector<Constant*> Initializer;
 						Initializer.reserve(arr_n);
 						Constant* zero = ConstantInt::get(IntegerType::get(M.getContext(), 32), 0);
-						
+
 						for (uint64_t i = 0; i < arr_n; i++) {
 							Initializer[i++] = zero; 
 						}
-						
+
 						ArrayType *ATy = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
 						Constant *initAr = llvm::ConstantArray::get(ATy, Initializer); 
 						iocArray->setInitializer(initAr);
-						
-		for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
-			if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind) {
-				dbg_msg("GLOBAL:", gvIt->getName().str());
-				GlobalVariable *tmpgl = gvIt;
-				//std::vector index_vector;
-				//index_vector.push_back( ConstantSInt::get( ATy, 0 );
 
-				GetElementPtrInst *gep = new GetElementPtrInst(tmpgl, ArrayRef <GlobalVariable *>tmpgl);
+						for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
+							if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind) {
+								dbg_msg("GLOBAL:", gvIt->getName().str());
+								GlobalVariable *tmpgl = gvIt;
+
+
+								/* 
+								 *
+								 * Add function to get address of this
+								 * Global Variable (separate BB)
+								 *
+								 */
+								PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+
+								std::vector<Type*>FuncTy_args;
+								FuncTy_args.push_back(IntegerType::get(M.getContext(), 32));
+								FunctionType* FuncTy = FunctionType::get(
+												/*Result=*/IntegerType::get(M.getContext(), 32),
+												/*Params=*/FuncTy_args,
+												/*isVarArg=*/false);
+
+								Function* func_foo = M.getFunction("getEntry_" + sinkKind);
+								if (!func_foo) {
+									func_foo = Function::Create(
+													/*Type=*/FuncTy,
+													/*Linkage=*/GlobalValue::ExternalLinkage,
+													/*Name=*/"getEntry_" + sinkKind, &M); 
+									func_foo->setCallingConv(CallingConv::C);
+								}
+
+								Function::arg_iterator args = func_foo->arg_begin();
+								Value* int32_c = args++;
+								int32_c->setName("c");
+
+								BasicBlock* label_entry = BasicBlock::Create(M.getContext(), "entry",func_foo,0);
+
+								CastInst* int64_idxprom = new SExtInst(int32_c, IntegerType::get(M.getContext(), 64), "idxprom", label_entry);
+								std::vector<Value*> ptr_arrayidx_indices;
+
+								ConstantInt* const_int64_6 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
+								ptr_arrayidx_indices.push_back(const_int64_6);
+								ptr_arrayidx_indices.push_back(int64_idxprom);
+
+								GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "arrayidx", label_entry);
+								LoadInst* int32_5 = new LoadInst(ptr_arrayidx, "", false, label_entry);
+								int32_5->setAlignment(4);
+								ReturnInst::Create(M.getContext(), int32_5, label_entry);
+								
+								
+								/*
+								 *
+								 * Function to check if ioc overflowed
+								 *
+								 */
+								Function *f;
+								Instruction *injIns;
+								//argument just needed for string
+								Constant *fc = M.getOrInsertFunction("checkIoc", //name
+																	 Type::getInt32Ty(M.getContext()), //function type
+																	 arrayPtr,
+																	 Type::getInt32Ty(M.getContext()),//position variable
+																	 /*Linkage=*/GlobalValue::ExternalLinkage,
+																	 (Type *)0);
+								std::vector<Value *> fargs;
+								fargs.push_back(ptr_arrayidx);       
+								fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+
+								f = cast<Function>(fc);
+								ArrayRef<Value *> functionArguments(fargs);
+								injIns = CallInst::Create(f, functionArguments, "");
+								ci->getParent()->getInstList().insert(ci, injIns);
+								
+								//create bb for functions
+								BasicBlock *bb = ci->getParent();
+						  		BasicBlock *bb_after = ci->getParent()->splitBasicBlock(ci);
+								bb->getTerminator()->eraseFromParent(); 
+ // Get pointers to the constants.
+      Value *Zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
+
+      /* set the predicate according to the value of trueOrFalse */
+      ICmpInst::Predicate predicate;
+	  predicate = ICmpInst::ICMP_EQ;
+
+      //IN LLVM the instruction is itself the result. Check 
+      //http://comments.gmane.org/gmane.comp.compilers.llvm.devel/49672
+      ICmpInst *CondInst = new ICmpInst(*bb,
+          predicate,
+          injIns,
+          Zero,
+          "cond");
+
+      BasicBlock *BB = BasicBlock::Create(M.getContext(),
+          "malloc_ioc_exit",
+          ci->getParent()->getParent());
+
+      BranchInst::Create(bb_after, BB, CondInst, bb);								
+
 #if 0
-				std::vector<Constant*>IndicesC(arr_n);
-				Constant* ptrgl = ConstantExpr::getGetElementPtr(tmpgl, 
-																 IndicesC[0],
-																 IndicesC.size());
+								/*
+								 *
+								 * call getEntry
+								 *
+								 */
+								std::vector<Value *> cargs;
+								Function* fentry = M.getFunction("getEntry_" + sinkKind);
+								if (!fentry)
+									dbg_msg("ERROR:", "could not get entry");
+								cargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+								ArrayRef<Value *> funArguments(cargs);
+								CallInst *geIns = CallInst::Create(fentry, funArguments, "", bb);
+								geIns->setCallingConv(CallingConv::C);
+								geIns->setTailCall(false);
 #endif
-		}
-
-		Function *f;
-		Instruction *injIns;
-
-		//argument just needed for string
-		Constant *fc = M.getOrInsertFunction("checkIoc", //name
-                        Type::getInt32Ty(M.getContext()), //function type
- 						Type::getInt32Ty(M.getContext()),//position variable
-  			/*Linkage=*/GlobalValue::ExternalLinkage,
-                        (Type *)0);
- 		std::vector<Value *> args;
-		args.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-		
-		f = cast<Function>(fc);
-		ArrayRef<Value *> functionArguments(args);
-        injIns = CallInst::Create(f, functionArguments, "");
-        ci->getParent()->getInstList().insert(ci, injIns);
+if (mi->getReturnType()->isVoidTy())
+          ReturnInst::Create(M.getContext(), BB);
+      else //for now only support void & number return types
+        ReturnInst::Create(M.getContext(), Zero, BB);
+return;
+							}
 					}
 				} 
 			}
@@ -1436,3 +1523,90 @@ InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 		//    assert(! "invalid function name");
 	}
 }
+
+
+#if 0
+#if 0
+								//std::vector index_vector;
+								//index_vector.push_back( ConstantSInt::get( ATy, 0 );
+								std::vector<Value*>new_idx;
+								new_idx.push_back(ConstantInt::get(M.getContext(), APInt(32, 0)));
+								new_idx.push_back(ConstantInt::get(M.getContext(), APInt(32, arr_n)));
+
+								Instruction *nextaddr = GetElementPtrInst::Create(tmpgl,
+																				  new_idx.begin(),
+																				  new_idx.end(),
+																				  "",
+																				  0);
+#endif
+
+				 	PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+ 
+					std::vector<Type*>FuncTy_args;
+					FuncTy_args.push_back(arrayPtr);
+					FuncTy_args.push_back(IntegerType::get(M.getContext(), 32));
+					FunctionType* FuncTy = FunctionType::get(
+									/*Result=*/IntegerType::get(M.getContext(), 32),
+									/*Params=*/FuncTy_args,
+									/*isVarArg=*/false);
+
+
+					Function* func_foo = M.getFunction("foo");
+					if (!func_foo) {
+						func_foo = Function::Create(
+										/*Type=*/FuncTy,
+										/*Linkage=*/GlobalValue::ExternalLinkage,
+										/*Name=*/"foo", &M); 
+						func_foo->setCallingConv(CallingConv::C);
+					}
+
+#if 0
+ Function::arg_iterator args = func_foo->arg_begin();
+ Value* ptr_s = args++;
+ ptr_s->setName("s");
+ Value* int32_c = args++;
+ int32_c->setName("c");
+ 
+ BasicBlock* label_entry = BasicBlock::Create(M.getContext(), "entry",func_foo,0);
+ 
+#endif
+ BasicBlock *label_entry = bb;
+ // Block entry (label_entry)
+ CastInst* int64_idxprom = new SExtInst(int32_c, IntegerType::get(M.getContext(), 64), "idxprom", label_entry);
+ std::vector<Value*> ptr_arrayidx_indices;
+ 
+ ConstantInt* const_int64_6 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
+ ptr_arrayidx_indices.push_back(const_int64_6);
+ ptr_arrayidx_indices.push_back(int64_idxprom);
+
+ GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "arrayidx", label_entry);
+ //LoadInst* int32_5 = new LoadInst(ptr_arrayidx, "", false, label_entry);
+ //int32_5->setAlignment(4);
+ //ReturnInst::Create(M.getContext(), int32_5, label_entry);
+
+								Function *f;
+								Instruction *injIns;
+
+								//argument just needed for string
+								Constant *fc = M.getOrInsertFunction("checkIoc", //name
+																	 Type::getInt32Ty(M.getContext()), //function type
+																	 arrayPtr,
+																	 Type::getInt32Ty(M.getContext()),//position variable
+																	 /*Linkage=*/GlobalValue::ExternalLinkage,
+																	 (Type *)0);
+								std::vector<Value *> fargs;
+								fargs.push_back(ptr_arrayidx);       
+								fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+
+								f = cast<Function>(fc);
+								ArrayRef<Value *> functionArguments(fargs);
+								injIns = CallInst::Create(f, functionArguments, "");
+								ci->getParent()->getInstList().insert(ci, injIns);
+							}
+					}
+				} 
+			}
+		}
+	}
+}
+#endif
