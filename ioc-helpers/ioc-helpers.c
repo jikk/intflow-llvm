@@ -10,7 +10,19 @@
 #define __OUTPUT_XML__
 
 
+/* FIXME needs sanity checks */
+void setFalseIOC(int *array, int pos)
+{
+	array[pos] = 0;
+	return;
+}
 
+void setTrueIOC(int *array, int pos)
+{
+	if (array[pos] == 0)
+		array[pos] = 1;
+	return;
+}
 
 int checkIOC(int *array, int size)
 {

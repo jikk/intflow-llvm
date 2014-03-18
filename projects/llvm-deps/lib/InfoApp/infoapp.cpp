@@ -426,14 +426,14 @@ InfoAppPass::runTest(Module &M)
 						std::string sinkKind = bb->getName();
 						dbg_msg("malloc:", sinkKind);
 
+						BasicBlock *ioc_bb  = NULL;
+						BasicBlock *pred_bb = NULL;
 						//see parent blocks
 						Function *sensParentF = bb->getParent();
 						for (iplist<BasicBlock>::iterator iter = sensParentF->getBasicBlockList().begin();
 							 iter != sensParentF->getBasicBlockList().end();
 							 iter++) {
 							BasicBlock *currBB = iter;
-							BasicBlock *ioc_bb;
-							BasicBlock *pred_bb;
 							
 							if (currBB->getTerminator()->getOpcode() == 2 && currBB->getTerminator()->getNumSuccessors() == 2) {
 								BasicBlock *suc0 = currBB->getTerminator()->getSuccessor(0);
@@ -488,14 +488,14 @@ InfoAppPass::runTest(Module &M)
 							return;
 						std::vector<Value*> ptr_arrayidx_indices;
 						ConstantInt* c_int32 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
-						Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 3);								
+						Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);								
 						ptr_arrayidx_indices.push_back(c_int32);
 						ptr_arrayidx_indices.push_back(array_idx);
-						GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
+						GetElementPtrInst* ptr_arrayidx_m = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
 
 						/*
 						 *
-						 * Function to check if ioc overflowed
+						 * Function before malloc to check if ioc overflowed
 						 *
 						 */
 						Function *f;
@@ -510,13 +510,58 @@ InfoAppPass::runTest(Module &M)
 															 /*Linkage=*/GlobalValue::ExternalLinkage,
 															 (Type *)0);
 						std::vector<Value *> fargs;
-						fargs.push_back(ptr_arrayidx);       
+						fargs.push_back(ptr_arrayidx_m);       
 						fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
 
 						f = cast<Function>(fc);
 						ArrayRef<Value *> functionArguments(fargs);
 						iocCheck = CallInst::Create(f, functionArguments, "");
 						ci->getParent()->getInstList().insert(ci, iocCheck);
+						
+						//-----------------------------------------------------------------------
+						Constant *ft = M.getOrInsertFunction("setTrueIOC", //name
+															 Type::getInt32Ty(M.getContext()), //function type
+															 arrayPtr,
+															 Type::getInt32Ty(M.getContext()), //size
+															 /*Linkage=*/GlobalValue::ExternalLinkage,
+															 (Type *)0);
+						std::vector<Value *> fargs_st;
+						fargs_st.push_back(ptr_arrayidx_m); 
+						//FIXME correct this for the position
+						fargs_st.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+
+						Function *ftr = cast<Function>(ft);
+						ArrayRef<Value *> ftArguments(fargs_st);
+						iocCheck = CallInst::Create(ftr, ftArguments, "");
+						if (ioc_bb != NULL) {
+							dbg_err("attempting ioc");
+							ioc_bb->getInstList().insert(ioc_bb->front(), iocCheck);
+						}
+						
+						//-----------------------------------------------------------------------
+						//FIXME check for inj variable to be 0 to see if we are
+						//coming straight from pred. If so set the respective
+						//bit false before malloc.
+#if 0
+						Constant *ff = M.getOrInsertFunction("setFalseIOC", //name
+															 Type::getInt32Ty(M.getContext()), //function type
+															 arrayPtr,
+															 Type::getInt32Ty(M.getContext()), //size
+															 /*Linkage=*/GlobalValue::ExternalLinkage,
+															 (Type *)0);
+						std::vector<Value *> fargs_sf;
+						fargs_sf.push_back(ptr_arrayidx);       
+						//FIXME correct this
+						fargs_sf.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+
+						Function *ffalse = cast<Function>(ff);
+						ArrayRef<Value *> ffArguments(fargs_sf);
+						iocCheck = CallInst::Create(ffalse, ffArguments, "");
+						if (ioc_bb != NULL) {
+							dbg_err("attempting pred");
+							ci->getParent->getInstList().insert(ioc_bb->front(), iocCheck);
+						}
+#endif
 					}
 				} 
 			}

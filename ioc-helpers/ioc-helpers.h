@@ -34,6 +34,8 @@ size_t __ioc_iconv(iconv_t cd,
 
 
 int checkIOC(int *array, int size);
+void setFalseIOC(int *array, int pos);
+void setTrueIOC(int *array, int pos);
 
 void __ioc____ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,
