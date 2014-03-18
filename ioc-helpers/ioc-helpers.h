@@ -32,6 +32,9 @@ size_t __ioc_iconv(iconv_t cd,
 #define FNAME "/tmp/log.txt"
 #define EXCLUDE_FNAME "/opt/stonesoup/etc/exclude.files"
 
+
+int checkIOC(int *array, int size);
+
 void __ioc____ioc_report_add_overflow(uint32_t line, uint32_t column,
                                const char *filename, const char *exprstr,
                                uint64_t lval, uint64_t rval, uint8_t T);

@@ -9,6 +9,20 @@
 
 #define __OUTPUT_XML__
 
+
+
+
+int checkIOC(int *array, int size)
+{
+	int result = 0;
+	int i;
+
+	for (i = 0; i < size; i++) {
+		result |= array[i];
+	}
+	printf("size is %d,  result is %d\n", size, result);
+}
+
 char* parseFName(char* fname) {
 
   char* s;

@@ -427,52 +427,14 @@ InfoAppPass::runTest(Module &M)
 
 						for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
 							if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind) {
-								dbg_msg("GLOBAL:", gvIt->getName().str());
+								//get global variable
 								GlobalVariable *tmpgl = gvIt;
-
-
-								/* 
-								 *
-								 * Add function to get address of this
-								 * Global Variable (separate BB)
-								 *
-								 */
-								PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
-
-								std::vector<Type*>FuncTy_args;
-								FuncTy_args.push_back(IntegerType::get(M.getContext(), 32));
-								FunctionType* FuncTy = FunctionType::get(
-												/*Result=*/IntegerType::get(M.getContext(), 32),
-												/*Params=*/FuncTy_args,
-												/*isVarArg=*/false);
-
-								Function* func_foo = M.getFunction("getEntry_" + sinkKind);
-								if (!func_foo) {
-									func_foo = Function::Create(
-													/*Type=*/FuncTy,
-													/*Linkage=*/GlobalValue::ExternalLinkage,
-													/*Name=*/"getEntry_" + sinkKind, &M); 
-									func_foo->setCallingConv(CallingConv::C);
-								}
-
-								Function::arg_iterator args = func_foo->arg_begin();
-								Value* int32_c = args++;
-								int32_c->setName("c");
-
-								BasicBlock* label_entry = BasicBlock::Create(M.getContext(), "entry",func_foo,0);
-
-								CastInst* int64_idxprom = new SExtInst(int32_c, IntegerType::get(M.getContext(), 64), "idxprom", label_entry);
 								std::vector<Value*> ptr_arrayidx_indices;
-
-								ConstantInt* const_int64_6 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
-								ptr_arrayidx_indices.push_back(const_int64_6);
-								ptr_arrayidx_indices.push_back(int64_idxprom);
-
-								GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "arrayidx", label_entry);
-								LoadInst* int32_5 = new LoadInst(ptr_arrayidx, "", false, label_entry);
-								int32_5->setAlignment(4);
-								ReturnInst::Create(M.getContext(), int32_5, label_entry);
-								
+								ConstantInt* c_int32 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
+								Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 3);								
+								ptr_arrayidx_indices.push_back(c_int32);
+								ptr_arrayidx_indices.push_back(array_idx);
+								GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
 								
 								/*
 								 *
@@ -480,12 +442,14 @@ InfoAppPass::runTest(Module &M)
 								 *
 								 */
 								Function *f;
-								Instruction *injIns;
+								Instruction *iocCheck;
+								
+								PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
 								//argument just needed for string
-								Constant *fc = M.getOrInsertFunction("checkIoc", //name
+								Constant *fc = M.getOrInsertFunction("checkIOC", //name
 																	 Type::getInt32Ty(M.getContext()), //function type
 																	 arrayPtr,
-																	 Type::getInt32Ty(M.getContext()),//position variable
+																	 Type::getInt32Ty(M.getContext()), //size
 																	 /*Linkage=*/GlobalValue::ExternalLinkage,
 																	 (Type *)0);
 								std::vector<Value *> fargs;
@@ -494,55 +458,43 @@ InfoAppPass::runTest(Module &M)
 
 								f = cast<Function>(fc);
 								ArrayRef<Value *> functionArguments(fargs);
-								injIns = CallInst::Create(f, functionArguments, "");
-								ci->getParent()->getInstList().insert(ci, injIns);
-								
-								//create bb for functions
-								BasicBlock *bb = ci->getParent();
-						  		BasicBlock *bb_after = ci->getParent()->splitBasicBlock(ci);
+								iocCheck = CallInst::Create(f, functionArguments, "");
+								ci->getParent()->getInstList().insert(ci, iocCheck);
+
+
+
+
+
+								/* Split BB in functions */
+								BasicBlock *bb_after = ci->getParent()->splitBasicBlock(ci);
 								bb->getTerminator()->eraseFromParent(); 
- // Get pointers to the constants.
-      Value *Zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
+								
 
-      /* set the predicate according to the value of trueOrFalse */
-      ICmpInst::Predicate predicate;
-	  predicate = ICmpInst::ICMP_EQ;
+								/* set the predicate */
+								ICmpInst::Predicate predicate;
+								predicate = ICmpInst::ICMP_EQ;
+								Value *Zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
 
-      //IN LLVM the instruction is itself the result. Check 
-      //http://comments.gmane.org/gmane.comp.compilers.llvm.devel/49672
-      ICmpInst *CondInst = new ICmpInst(*bb,
-          predicate,
-          injIns,
-          Zero,
-          "cond");
+								ICmpInst *condInst = new ICmpInst(*bb,
+																  predicate,
+																  iocCheck,
+																  Zero,
+																  "iocCond");
 
-      BasicBlock *BB = BasicBlock::Create(M.getContext(),
-          "malloc_ioc_exit",
-          ci->getParent()->getParent());
+								BasicBlock *bbMallocExit = BasicBlock::Create(M.getContext(),
+																	"ioc_malloc_exit",
+																	ci->getParent()->getParent());
 
-      BranchInst::Create(bb_after, BB, CondInst, bb);								
+								dbg_msg("bb_malloc name: ",bb_after->getName());
+								BranchInst::Create(bb_after,
+												   bbMallocExit,
+												   condInst,
+												   bb);								
 
-#if 0
-								/*
-								 *
-								 * call getEntry
-								 *
-								 */
-								std::vector<Value *> cargs;
-								Function* fentry = M.getFunction("getEntry_" + sinkKind);
-								if (!fentry)
-									dbg_msg("ERROR:", "could not get entry");
-								cargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-								ArrayRef<Value *> funArguments(cargs);
-								CallInst *geIns = CallInst::Create(fentry, funArguments, "", bb);
-								geIns->setCallingConv(CallingConv::C);
-								geIns->setTailCall(false);
-#endif
-if (mi->getReturnType()->isVoidTy())
-          ReturnInst::Create(M.getContext(), BB);
-      else //for now only support void & number return types
-        ReturnInst::Create(M.getContext(), Zero, BB);
-return;
+								ReturnInst::Create(M.getContext(),
+												   Zero,
+												   bbMallocExit);
+								return;
 							}
 					}
 				} 
