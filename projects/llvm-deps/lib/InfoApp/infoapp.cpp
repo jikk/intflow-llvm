@@ -373,11 +373,34 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 	}
 }
 
+
+AllocaInst* 
+InfoAppPass::insertStoreInt32Inst(LLVMContext &Context,
+								 std::string name,
+								 int value,
+								 inst_iterator &I)
+{
+	int alignment = 4;
+
+	AllocaInst* inst = new AllocaInst(Type::getInt32Ty(Context), 0, name);
+	inst->setAlignment(alignment);
+	I->getParent()->getInstList().insert(I.getInstructionIterator(), inst);
+	ConstantInt *v = ConstantInt::get(Context, APInt(32, value));
+	new StoreInst(v,
+				  inst,
+				  false,
+				  alignment,
+				  (Instruction *)I.getInstructionIterator());
+	return inst;
+}
+
+
 void
 InfoAppPass::runTest(Module &M)
 {
 	uint64_t arr_n = 5;
 	uint64_t ioc_cnt = 1;
+	GlobalVariable *tmpgl = NULL;
 	Function *func;
 	iplist<GlobalVariable>::iterator gvIt;
 	//Do a first pass and count ioc and sens entries
@@ -401,7 +424,38 @@ InfoAppPass::runTest(Module &M)
 						//find basic block of sensitive
 						BasicBlock *bb = ii->getParent();
 						std::string sinkKind = bb->getName();
+						dbg_msg("malloc:", sinkKind);
 
+						//see parent blocks
+						Function *sensParentF = bb->getParent();
+						for (iplist<BasicBlock>::iterator iter = sensParentF->getBasicBlockList().begin();
+							 iter != sensParentF->getBasicBlockList().end();
+							 iter++) {
+							BasicBlock *currBB = iter;
+							BasicBlock *ioc_bb;
+							BasicBlock *pred_bb;
+							
+							if (currBB->getTerminator()->getOpcode() == 2 && currBB->getTerminator()->getNumSuccessors() == 2) {
+								BasicBlock *suc0 = currBB->getTerminator()->getSuccessor(0);
+								BasicBlock *suc1 = currBB->getTerminator()->getSuccessor(1);
+								pred_bb = currBB;
+								if (suc0->getName() == sinkKind &&
+									StringRef(suc1->getName()).startswith("ioc_")) {
+									ioc_bb = suc1;
+									dbg_msg("aff. ioc: ", ioc_bb->getName());
+									dbg_msg("caller BB is : ", pred_bb->getName());
+									dbg_msg("sensitive is : ", sinkKind);
+									insertStoreInt32Inst(M.getContext(), "xvariable", 0, --inst_end(*sensParentF));
+
+								} else if (suc1->getName() == sinkKind &&
+									StringRef(suc0->getName()).startswith("ioc_")) {
+									ioc_bb = suc0;
+									dbg_msg("affecting ioc: ", ioc_bb->getName());
+									dbg_msg("caller BB is : ", pred_bb->getName());
+									dbg_msg("sensitive is : ", sinkKind);
+								}
+							}
+						}
 						/* Initialize malloc array */
 						//FIXME replace with ioc_cnt
 						ArrayType* intPtr = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
@@ -426,76 +480,43 @@ InfoAppPass::runTest(Module &M)
 						iocArray->setInitializer(initAr);
 
 						for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
-							if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind) {
+							if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind)
 								//get global variable
-								GlobalVariable *tmpgl = gvIt;
-								std::vector<Value*> ptr_arrayidx_indices;
-								ConstantInt* c_int32 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
-								Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 3);								
-								ptr_arrayidx_indices.push_back(c_int32);
-								ptr_arrayidx_indices.push_back(array_idx);
-								GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
-								
-								/*
-								 *
-								 * Function to check if ioc overflowed
-								 *
-								 */
-								Function *f;
-								Instruction *iocCheck;
-								
-								PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
-								//argument just needed for string
-								Constant *fc = M.getOrInsertFunction("checkIOC", //name
-																	 Type::getInt32Ty(M.getContext()), //function type
-																	 arrayPtr,
-																	 Type::getInt32Ty(M.getContext()), //size
-																	 /*Linkage=*/GlobalValue::ExternalLinkage,
-																	 (Type *)0);
-								std::vector<Value *> fargs;
-								fargs.push_back(ptr_arrayidx);       
-								fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
+								tmpgl = gvIt;
+						
+						if (tmpgl == NULL)
+							return;
+						std::vector<Value*> ptr_arrayidx_indices;
+						ConstantInt* c_int32 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
+						Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 3);								
+						ptr_arrayidx_indices.push_back(c_int32);
+						ptr_arrayidx_indices.push_back(array_idx);
+						GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
 
-								f = cast<Function>(fc);
-								ArrayRef<Value *> functionArguments(fargs);
-								iocCheck = CallInst::Create(f, functionArguments, "");
-								ci->getParent()->getInstList().insert(ci, iocCheck);
+						/*
+						 *
+						 * Function to check if ioc overflowed
+						 *
+						 */
+						Function *f;
+						Instruction *iocCheck;
 
+						PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+						//argument just needed for string
+						Constant *fc = M.getOrInsertFunction("checkIOC", //name
+															 Type::getInt32Ty(M.getContext()), //function type
+															 arrayPtr,
+															 Type::getInt32Ty(M.getContext()), //size
+															 /*Linkage=*/GlobalValue::ExternalLinkage,
+															 (Type *)0);
+						std::vector<Value *> fargs;
+						fargs.push_back(ptr_arrayidx);       
+						fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
 
-
-
-
-								/* Split BB in functions */
-								BasicBlock *bb_after = ci->getParent()->splitBasicBlock(ci);
-								bb->getTerminator()->eraseFromParent(); 
-								
-
-								/* set the predicate */
-								ICmpInst::Predicate predicate;
-								predicate = ICmpInst::ICMP_EQ;
-								Value *Zero = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
-
-								ICmpInst *condInst = new ICmpInst(*bb,
-																  predicate,
-																  iocCheck,
-																  Zero,
-																  "iocCond");
-
-								BasicBlock *bbMallocExit = BasicBlock::Create(M.getContext(),
-																	"ioc_malloc_exit",
-																	ci->getParent()->getParent());
-
-								dbg_msg("bb_malloc name: ",bb_after->getName());
-								BranchInst::Create(bb_after,
-												   bbMallocExit,
-												   condInst,
-												   bb);								
-
-								ReturnInst::Create(M.getContext(),
-												   Zero,
-												   bbMallocExit);
-								return;
-							}
+						f = cast<Function>(fc);
+						ArrayRef<Value *> functionArguments(fargs);
+						iocCheck = CallInst::Create(f, functionArguments, "");
+						ci->getParent()->getInstList().insert(ci, iocCheck);
 					}
 				} 
 			}

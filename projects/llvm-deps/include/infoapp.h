@@ -5,6 +5,7 @@
 #include "llvm/PassManager.h"
 #include "llvm/Module.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/Support/InstIterator.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
@@ -56,6 +57,11 @@ class InfoAppPass : public ModulePass {
     void runOnModuleBlacklisting(Module &M);
     void runOnModuleSensitive(Module &M);
     void runTest(Module &M);
+
+	AllocaInst *insertStoreInt32Inst(LLVMContext &Context, 
+									 std::string name,
+									 int value,
+									 inst_iterator &I);
 
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.
