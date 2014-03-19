@@ -92,8 +92,8 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	}
 	else if (mode == SENSITIVE) {
 		dbg_err("Sensitive");
-		runTest(M);
-		//runOnModuleSensitive(M);
+		//runTest(M);
+		runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
 		/* TODO: to be added */
@@ -104,6 +104,26 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	
 	//doFinalization();
 }
+
+#if 0
+void
+InfoAppPass::addFunctions(Module &M, GlobalVariable * glArray) {
+	dbg_err("adding functions");
+	DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
+	DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
+	uint64_t pos = 0;
+	for (;xi!=xe; xi++) {
+		if (xi->second) {
+			insertIntFlowFunction(M,
+								  "setTrueIOC",
+								  xi->first,
+								  dyn_cast<BasicBlock::iterator>(xi->first),
+								  glArray,
+								  pos++);
+		}
+	}
+}
+#endif
 
 void
 InfoAppPass::doFinalization() {
@@ -395,14 +415,106 @@ InfoAppPass::insertStoreInt32Inst(LLVMContext &Context,
 }
 
 
+GlobalVariable* 
+InfoAppPass::createGlobalArray(Module &M, uint64_t size, std::string sinkKind)
+{
+	ArrayType* intPtr = ArrayType::get(IntegerType::get(M.getContext(), 32),
+									   size);
+
+	GlobalVariable* iocArray = 
+		new GlobalVariable(/*Module=*/M, 
+						   /*Type=*/intPtr,
+						   /*isConstant=*/false,
+						   /*Linkage=*/GlobalValue::ExternalLinkage,
+						   /*Initializer=*/0, 
+						   /*Name=*/"__gl_ioc_malloc_" + sinkKind);
+	iocArray->setAlignment(8);
+	
+	/* Set Initializer */
+	std::vector<Constant*> Initializer;
+	Initializer.reserve(size);
+	Constant* zero = ConstantInt::get(IntegerType::get(M.getContext(), 32), 0);
+
+	for (uint64_t i = 0; i < size; i++) {
+		Initializer[i++] = zero; 
+	}
+
+	ArrayType *ATy = ArrayType::get(IntegerType::get(M.getContext(), 32), size);
+	Constant *initAr = llvm::ConstantArray::get(ATy, Initializer); 
+	
+	/* Initialize Array */
+	iocArray->setInitializer(initAr);
+	return iocArray;
+}
+
+GlobalVariable* 
+InfoAppPass::getGlobalArray(Module &M, std::string sinkKind)
+{
+	iplist<GlobalVariable>::iterator gvIt;
+	GlobalVariable *tmpgl = NULL;
+	
+	for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
+		if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind)
+			tmpgl = gvIt;
+
+	return tmpgl;
+}
+
+void
+InfoAppPass::insertIntFlowFunction(Module &M,
+								   std::string name, 
+								   CallInst *ci,
+								   BasicBlock::iterator ii,
+								   GlobalVariable *tmpgl,
+								   uint64_t idx)
+{
+	Function *f;
+	Instruction *iocCheck;
+
+	/* Get address of global array */
+	std::vector<Value*> ptr_arrayidx_indices;
+	ConstantInt* c_int32 = ConstantInt::get(M.getContext(),
+											APInt(64, StringRef("0"), 10));
+	Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);								
+	ptr_arrayidx_indices.push_back(c_int32);
+	ptr_arrayidx_indices.push_back(array_idx);
+	
+	/* ptr_arrayidx_m is the array addr for tmpgl */
+	GetElementPtrInst* ptr_arrayidx_m = 
+		GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
+	
+	PointerType* arrayPtr = 
+		PointerType::get(IntegerType::get(M.getContext(), 32), 0);
+	
+	
+	
+	/* Construct Function */
+	Constant *fc = M.getOrInsertFunction(name, 
+							/* type */   Type::getInt32Ty(M.getContext()), 
+							/* arg1 */ 	 arrayPtr,
+							/* arg2 */	 Type::getInt32Ty(M.getContext()),
+						 /* Linkage */   GlobalValue::ExternalLinkage,
+										 (Type *)0);
+	
+	/* Create Args */
+	std::vector<Value *> fargs;
+	/* Push global array to args */
+	fargs.push_back(ptr_arrayidx_m);
+	/* Push number of elements */
+	fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, idx)));       
+
+	f = cast<Function>(fc);
+	ArrayRef<Value *> functionArguments(fargs);
+	iocCheck = CallInst::Create(f, functionArguments, "");
+	
+	/* Insert Function */
+	ci->getParent()->getInstList().insert(ci, iocCheck);
+}
+
 void
 InfoAppPass::runTest(Module &M)
 {
-	uint64_t arr_n = 5;
-	uint64_t ioc_cnt = 1;
-	GlobalVariable *tmpgl = NULL;
 	Function *func;
-	iplist<GlobalVariable>::iterator gvIt;
 	//Do a first pass and count ioc and sens entries
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
@@ -456,112 +568,7 @@ InfoAppPass::runTest(Module &M)
 								}
 							}
 						}
-						/* Initialize malloc array */
-						//FIXME replace with ioc_cnt
-						ArrayType* intPtr = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
 
-						GlobalVariable* iocArray = new GlobalVariable(/*Module=*/M, 
-																	  /*Type=*/intPtr,
-																	  /*isConstant=*/false,
-																	  /*Linkage=*/GlobalValue::ExternalLinkage,
-																	  /*Initializer=*/0, // has initializer, specified below
-																	  /*Name=*/"__gl_ioc_malloc_" + sinkKind);
-						iocArray->setAlignment(8);
-						std::vector<Constant*> Initializer;
-						Initializer.reserve(arr_n);
-						Constant* zero = ConstantInt::get(IntegerType::get(M.getContext(), 32), 0);
-
-						for (uint64_t i = 0; i < arr_n; i++) {
-							Initializer[i++] = zero; 
-						}
-
-						ArrayType *ATy = ArrayType::get(IntegerType::get(M.getContext(), 32), arr_n);
-						Constant *initAr = llvm::ConstantArray::get(ATy, Initializer); 
-						iocArray->setInitializer(initAr);
-
-						for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
-							if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind)
-								//get global variable
-								tmpgl = gvIt;
-						
-						if (tmpgl == NULL)
-							return;
-						std::vector<Value*> ptr_arrayidx_indices;
-						ConstantInt* c_int32 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
-						Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);								
-						ptr_arrayidx_indices.push_back(c_int32);
-						ptr_arrayidx_indices.push_back(array_idx);
-						GetElementPtrInst* ptr_arrayidx_m = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
-
-						/*
-						 *
-						 * Function before malloc to check if ioc overflowed
-						 *
-						 */
-						Function *f;
-						Instruction *iocCheck;
-
-						PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
-						//argument just needed for string
-						Constant *fc = M.getOrInsertFunction("checkIOC", //name
-															 Type::getInt32Ty(M.getContext()), //function type
-															 arrayPtr,
-															 Type::getInt32Ty(M.getContext()), //size
-															 /*Linkage=*/GlobalValue::ExternalLinkage,
-															 (Type *)0);
-						std::vector<Value *> fargs;
-						fargs.push_back(ptr_arrayidx_m);       
-						fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-
-						f = cast<Function>(fc);
-						ArrayRef<Value *> functionArguments(fargs);
-						iocCheck = CallInst::Create(f, functionArguments, "");
-						ci->getParent()->getInstList().insert(ci, iocCheck);
-						
-						//-----------------------------------------------------------------------
-						Constant *ft = M.getOrInsertFunction("setTrueIOC", //name
-															 Type::getInt32Ty(M.getContext()), //function type
-															 arrayPtr,
-															 Type::getInt32Ty(M.getContext()), //size
-															 /*Linkage=*/GlobalValue::ExternalLinkage,
-															 (Type *)0);
-						std::vector<Value *> fargs_st;
-						fargs_st.push_back(ptr_arrayidx_m); 
-						//FIXME correct this for the position
-						fargs_st.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-
-						Function *ftr = cast<Function>(ft);
-						ArrayRef<Value *> ftArguments(fargs_st);
-						iocCheck = CallInst::Create(ftr, ftArguments, "");
-						if (ioc_bb != NULL) {
-							dbg_err("attempting ioc");
-							ioc_bb->getInstList().insert(ioc_bb->front(), iocCheck);
-						}
-						
-						//-----------------------------------------------------------------------
-						//FIXME check for inj variable to be 0 to see if we are
-						//coming straight from pred. If so set the respective
-						//bit false before malloc.
-#if 0
-						Constant *ff = M.getOrInsertFunction("setFalseIOC", //name
-															 Type::getInt32Ty(M.getContext()), //function type
-															 arrayPtr,
-															 Type::getInt32Ty(M.getContext()), //size
-															 /*Linkage=*/GlobalValue::ExternalLinkage,
-															 (Type *)0);
-						std::vector<Value *> fargs_sf;
-						fargs_sf.push_back(ptr_arrayidx);       
-						//FIXME correct this
-						fargs_sf.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-
-						Function *ffalse = cast<Function>(ff);
-						ArrayRef<Value *> ffArguments(fargs_sf);
-						iocCheck = CallInst::Create(ffalse, ffArguments, "");
-						if (ioc_bb != NULL) {
-							dbg_err("attempting pred");
-							ci->getParent->getInstList().insert(ioc_bb->front(), iocCheck);
-						}
-#endif
 					}
 				} 
 			}
@@ -583,39 +590,6 @@ void
 InfoAppPass::runOnModuleSensitive(Module &M)
 {
 	Function *func;
-	uint64_t ioc_cnt  = 0;
-
-	//Do a first pass and count ioc and sens entries
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-
-					func = ci->getCalledFunction();
-					if (!func)
-						continue;
-
-					if (ioc_report_all(func->getName())) {
-						ioc_cnt++;
-					}
-				}
-			} /* for-loops close here*/
-		}
-	}
-
-	uint64_t tmp_cnt  = 0;
-	iocIdName = new std::string[ioc_cnt];
-
-#if 0	
-	//FIXME remove this
-	std::stringstream SS;
-	SS << ioc_cnt;
-	dbg_msg("ioc total", SS.str());
-#endif
-
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		removeChecksForFunction(F, M);
@@ -629,12 +603,8 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					if (!func)
 						continue;
 
-					if (ioc_report_all(func->getName())) {
-						//FIXME create a table globally
-						//(can we do better?)
-						BasicBlock *bb = ii->getParent();
-						iocIdName[tmp_cnt++] = bb->getName();
-					}
+					//true removes a wrapper
+					//xformMap[ci] = true;
 
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
@@ -644,7 +614,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 
 						//find malloc basic block
 						BasicBlock *bb = ii->getParent();
-						dbg_msg("bb is", bb->getName());
+						dbg_msg("bb :", bb->getName());
 						
 						std::string sinkKind = bb->getName();
 						InfoflowSolution *soln = getBackwardsSol(sinkKind,
@@ -661,26 +631,25 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							xformMap[ci] = true;
 
 						} else {
-
-		//Add function to malloc
-		std::vector<Value *> args;
-		Function *f;
-		Instruction *injIns;
-		args.push_back(ConstantInt::get(M.getContext(), APInt(32, 0)));
-        
-		Constant *fc = M.getOrInsertFunction("xorIocBlocks", //name
-                        Type::getInt32Ty(M.getContext()), //type
-						//args
-                        Type::getInt32Ty(M.getContext()),
-                        (Type *)0);
-        f = cast<Function>(fc);
-        ArrayRef<Value *> functionArguments(args);
-        injIns = CallInst::Create(f, functionArguments, "");
-        ci->getParent()->getInstList().insert(ci, injIns);
-	
 							iocPoints[sinkKind] = std::vector<iocPoint>();
+							
 							//check forward
 							trackSoln(M, soln, ci, sinkKind);
+							
+							//get all ioc checks that lead to this sink
+							uint64_t totalIOC = iocPoints[sinkKind].size();
+							
+							//create the respective global array
+							GlobalVariable *glA = createGlobalArray(M,
+																	totalIOC,
+																	sinkKind);
+
+							//insert the check before the operation
+							insertIntFlowFunction(M, "checkIOC", ci, ii, 
+												  glA, totalIOC);
+
+							//insert functions to ioc blocks
+							//addFunc(M, soln, ci, sinkKind);
 						}
 					} else if ((func->getName() == "div")   ||
 							   (func->getName() == "ldiv")  ||
@@ -1016,8 +985,8 @@ InfoAppPass::trackSoln(Module &M,
 					DEBUG(ii->dump());
 
 					if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-						if (xformMap[ci])
-							continue;
+	//					if (xformMap[ci])
+	//						continue;
 						ret = ret || trackSolnInst(ci, M, sinkCI, soln, kind);
 					}
 				}
@@ -1026,6 +995,9 @@ InfoAppPass::trackSoln(Module &M,
 	}
 	return ret;
 }
+
+
+
 
 /* FIXME refactor */
 /* 
@@ -1050,6 +1022,7 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	Function* func = ci->getCalledFunction();
 	std::string fname = func->getName();
 
+	dbg_msg("called :", fname);
 	//check for white-listing
 	const CallTaintEntry *entry = findEntryForFunction(wLstSourceSummaries,
 													   fname);
@@ -1128,6 +1101,8 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		BasicBlock *ioc_bb = ci->getParent();
 		iocPoint p;
 		
+		xformMap[ci] = true;
+		return true;
 		if (iocPoints[kind].empty()) {
 			/* If not here, create and set to false */
 			p[ioc_bb->getName()] = false;
@@ -1175,8 +1150,8 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 
 			if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
 				dbg_err("checkForwardTainted:sens0:true");
-				
-				//FIXME remove this
+
+				//FIXME change this to false or remove
 				xformMap[ci] = true;
 
 				//create mvar, add it to the set for this particular malloc
@@ -1206,6 +1181,107 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	
 	return ret;
 }
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  addFunc
+ *    Arguments:  @M - the source code module
+ *  Description:  TODO
+ *  		
+ * ============================================================================
+ */
+void
+InfoAppPass::addFunc(Module &M,
+		InfoflowSolution* soln,
+		CallInst* sinkCI,
+		std::string& kind)
+{
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+				if (checkBackwardTainted(*ii, soln)) {
+					DEBUG(ii->dump());
+
+					if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+						addFuncInst(ci, M, sinkCI, ii, soln, kind);
+					}
+				}
+			}
+		}
+	}
+}
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  addFuncInst
+ *    Arguments:  @M - the source code module
+ *    			TODO
+ *  Description: checks first if each instruction in the solution is forward
+ *  			tainted and returns true or false
+ *  		
+ * ============================================================================
+ */
+void 
+InfoAppPass::addFuncInst(CallInst *ci,
+						   Module &M,
+						   CallInst* sinkCI,
+						   BasicBlock::iterator ii, 
+						   InfoflowSolution* soln,
+						   std::string& kind)
+{
+	uint64_t glA_pos = 0;
+	
+	Function* func = ci->getCalledFunction();
+	std::string fname = func->getName();
+
+	if (StringRef(fname).startswith("__ioc") && mode == SENSITIVE) {
+		glA_pos++;
+		//FIXME unique id for ioc src argument. This could be the BB?
+		std::string srcKind = getKindId("sens-ioc",
+										&unique_id);
+
+		if(fname == "__ioc_report_conversion") {
+			InfoflowSolution* fsoln = getForwSolConv(srcKind, ci);
+
+			if (checkForwardTainted(*(ci->getOperand(7)), fsoln) && 
+				xformMap[ci]) {
+
+				xformMap[ci] = false;
+				dbg_err("replacing sens0 with check");
+
+				//create the respective global array
+				GlobalVariable *glA = getGlobalArray(M, kind);
+
+				//insert the check before the operation
+				insertIntFlowFunction(M, "setTrueIOC", ci, ii, glA, glA_pos); 
+				return;
+			} 
+		} else if (ioc_report_all_but_conv(fname)) {
+			InfoflowSolution* fsoln = getForwSolArithm(srcKind, ci);
+			
+			if ((checkForwardTainted(*(ci->getOperand(4)), fsoln) ||
+				checkForwardTainted(*(ci->getOperand(5)), fsoln)) &&
+				xformMap[ci]) {
+
+				xformMap[ci] = false;
+				
+				//create the respective global array
+				GlobalVariable *glA = getGlobalArray(M, kind);
+
+				insertIntFlowFunction(M, "setTrueIOC", ci, ii, glA, glA_pos); 
+				
+				dbg_err("replacing sens1 with check");
+				return;
+			} 
+		} else {
+			assert(false && "not sensitive function");
+		}
+	}
+}
+
 
 /* ****************************************************************************
  * ============================================================================
@@ -1335,6 +1411,7 @@ InfoAppPass::getMode() {
 		exit(1);
 	}
 	ifmode >> tmp;
+	dbg_msg("mode is:", tmp);
 	mode = (unsigned char) atoi(tmp.c_str());
 	ifmode >> tmp;
 	if (ifmode.good()) {

@@ -63,11 +63,25 @@ class InfoAppPass : public ModulePass {
 									 int value,
 									 inst_iterator &I);
 
-    /// Traverse instructions from the module(M) and identify tainted
-    /// instructions.
-    /// if it returns true: tag it to replace it with dummy
-    ///       returns false: do not change
-  
+
+	void insertIntFlowFunction(Module &M,
+							   std::string name,
+							   CallInst *ci,
+							   BasicBlock::iterator ii,
+							   GlobalVariable *g,
+							   uint64_t totalIOC);
+
+	GlobalVariable *createGlobalArray(Module &M,
+									  uint64_t size,
+									  std::string sinkKind);
+
+	GlobalVariable *getGlobalArray(Module &M, std::string sinkKind);
+	void addFunctions(Module &M, GlobalVariable * gl);
+	/// Traverse instructions from the module(M) and identify tainted
+	/// instructions.
+	/// if it returns true: tag it to replace it with dummy
+	///       returns false: do not change
+
 	bool trackSoln(Module &M,
 				   InfoflowSolution* soln,
 				   CallInst* sinkCI,
@@ -75,6 +89,16 @@ class InfoAppPass : public ModulePass {
 	bool trackSolnInst(CallInst *i,
 					   Module &M,
 					   CallInst *ci,
+					   InfoflowSolution* soln,
+					   std::string& s);
+	void addFunc(Module &M,
+				   InfoflowSolution* soln,
+				   CallInst* sinkCI,
+				   std::string& kinds);
+	void addFuncInst(CallInst *i,
+					   Module &M,
+					   CallInst *ci,
+					   BasicBlock::iterator ii,
 					   InfoflowSolution* soln,
 					   std::string& s);
 	void backwardSlicingBlacklisting(Module &M,
@@ -144,7 +168,7 @@ typedef  struct {
 
 typedef std::map <std::string, bool> iocPoint;
 typedef std::vector <iocPoint> iocPointVector;
-typedef std::map <std::string, iocPointVector > iocPointsForSens;
+typedef std::map <std::string, iocPointVector> iocPointsForSens;
 
 iocPointsForSens iocPoints;
 
