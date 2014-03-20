@@ -92,8 +92,8 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	}
 	else if (mode == SENSITIVE) {
 		dbg_err("Sensitive");
-		//runTest(M);
-		runOnModuleSensitive(M);
+		runTest(M);
+		//runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
 		/* TODO: to be added */
@@ -393,7 +393,7 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 	}
 }
 
-
+//FIXME remove this
 AllocaInst* 
 InfoAppPass::insertStoreInt32Inst(LLVMContext &Context,
 								 std::string name,
@@ -528,48 +528,82 @@ InfoAppPass::runTest(Module &M)
 					if (!func)
 						continue;
 
-					const CallTaintEntry *entry =
-						findEntryForFunction(sensSinkSummaries,
-											 func->getName());
-					if (entry->Name) {
+					BasicBlock *bb = ii->getParent();
 
-						//find basic block of sensitive
-						BasicBlock *bb = ii->getParent();
-						std::string sinkKind = bb->getName();
-						dbg_msg("malloc:", sinkKind);
+					if (StringRef(func->getName()).startswith("__ioc_")) {
 
-						BasicBlock *ioc_bb  = NULL;
-						BasicBlock *pred_bb = NULL;
-						//see parent blocks
+						llvm::errs() << "---------------------------------"<< "\n";
+						llvm::errs() << "" << func->getName() << ":";
+						llvm::errs() << bb->getName() << "\n\n";
+
+						//	BasicBlock *next_bb  = NULL;
+						//	BasicBlock *caller_bb = NULL;
+						int ret = 0;
 						Function *sensParentF = bb->getParent();
-						for (iplist<BasicBlock>::iterator iter = sensParentF->getBasicBlockList().begin();
+						for (iplist<BasicBlock>::iterator iter = 
+							 sensParentF->getBasicBlockList().begin();
 							 iter != sensParentF->getBasicBlockList().end();
 							 iter++) {
-							BasicBlock *currBB = iter;
-							
-							if (currBB->getTerminator()->getOpcode() == 2 && currBB->getTerminator()->getNumSuccessors() == 2) {
-								BasicBlock *suc0 = currBB->getTerminator()->getSuccessor(0);
-								BasicBlock *suc1 = currBB->getTerminator()->getSuccessor(1);
-								pred_bb = currBB;
-								if (suc0->getName() == sinkKind &&
-									StringRef(suc1->getName()).startswith("ioc_")) {
-									ioc_bb = suc1;
-									dbg_msg("aff. ioc: ", ioc_bb->getName());
-									dbg_msg("caller BB is : ", pred_bb->getName());
-									dbg_msg("sensitive is : ", sinkKind);
-									insertStoreInt32Inst(M.getContext(), "xvariable", 0, --inst_end(*sensParentF));
+							if (iter->getTerminator()->getOpcode() == 2 &&
+								iter->getTerminator()->getNumSuccessors() == 2) {
 
-								} else if (suc1->getName() == sinkKind &&
-									StringRef(suc0->getName()).startswith("ioc_")) {
-									ioc_bb = suc0;
-									dbg_msg("affecting ioc: ", ioc_bb->getName());
-									dbg_msg("caller BB is : ", pred_bb->getName());
-									dbg_msg("sensitive is : ", sinkKind);
+								BasicBlock *suc0 = iter->getTerminator()->getSuccessor(0);
+								BasicBlock *suc1 = iter->getTerminator()->getSuccessor(1);
+								if (StringRef(suc1->getName()).startswith("ioc_")) {
+									dbg_msg("------parent is: ", iter->getName());
+									dbg_msg("------current: ", suc1->getName());
+									dbg_msg("------next: ", suc0->getName());
+
+									BasicBlock& B = *iter;
+									for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+										ii->dump();
+										ret = 0;
+										infoflow->setTainted(sensParentF->getName(), *ii);
+										std::set<std::string> kinds;
+										kinds.insert(sensParentF->getName());
+
+										InfoflowSolution *fsoln = 
+											infoflow->leastSolution(kinds, false, true);
+
+
+										for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+											Function& F = *mi;
+
+											for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+												BasicBlock& B = *bi;
+												for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+													if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+														Function* func = ci->getCalledFunction();
+														std::string fname = func->getName();
+														if (fname == "malloc")
+															if (checkForwardTainted(*(ci->getOperand(0)), fsoln)) {
+																dbg_err("found malloc\n");
+																ret = 1;
+																break;
+															}
+													}
+												}
+											}
+										}
+
+										if (ret == 1) {
+											ret = 0;
+											break;
+										}
+									}
 								}
 							}
 						}
-
 					}
+#if 0			
+					if (ioc_report_all_but_conv(func->getName())) {
+						InfoflowSolution* soln = getBackSolArithm(sinkKind, ci);
+						trackSoln(M, soln, ci, sinkKind);
+					} else if (func->getName() == "__ioc_report_conversion") {
+						InfoflowSolution* soln = getBackSolConv(sinkKind, ci);
+						trackSoln(M, soln, ci, sinkKind);
+					}
+#endif					
 				} 
 			}
 		}
@@ -603,8 +637,6 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					if (!func)
 						continue;
 
-					//true removes a wrapper
-					//xformMap[ci] = true;
 
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
@@ -626,7 +658,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 
 						if(isConstAssign(vMap))
 						{
-							/* we want to keep those */
+							/* we want to keep those: true removes a wrapper */
 							dbg_err("sens-const");
 							xformMap[ci] = true;
 
@@ -637,13 +669,14 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							trackSoln(M, soln, ci, sinkKind);
 							
 							//get all ioc checks that lead to this sink
+							//FIXME currently only 1
 							uint64_t totalIOC = iocPoints[sinkKind].size();
 							
 							//create the respective global array
 							GlobalVariable *glA = createGlobalArray(M,
 																	totalIOC,
 																	sinkKind);
-
+							
 							//insert the check before the operation
 							insertIntFlowFunction(M, "checkIOC", ci, ii, 
 												  glA, totalIOC);
@@ -983,10 +1016,7 @@ InfoAppPass::trackSoln(Module &M,
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (checkBackwardTainted(*ii, soln)) {
 					DEBUG(ii->dump());
-
 					if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-	//					if (xformMap[ci])
-	//						continue;
 						ret = ret || trackSolnInst(ci, M, sinkCI, soln, kind);
 					}
 				}
@@ -1022,7 +1052,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	Function* func = ci->getCalledFunction();
 	std::string fname = func->getName();
 
-	dbg_msg("called :", fname);
 	//check for white-listing
 	const CallTaintEntry *entry = findEntryForFunction(wLstSourceSummaries,
 													   fname);
@@ -1091,6 +1120,10 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		}
 	}
 
+	if (mode == SENSITIVE) {
+		dbg_msg("backward led to ", fname);
+	}
+	return false;
 	if (StringRef(fname).startswith("__ioc") && mode == SENSITIVE) {
 		
 		//FIXME unique id for ioc src argument. This could be the BB?
@@ -1101,8 +1134,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		BasicBlock *ioc_bb = ci->getParent();
 		iocPoint p;
 		
-		xformMap[ci] = true;
-		return true;
 		if (iocPoints[kind].empty()) {
 			/* If not here, create and set to false */
 			p[ioc_bb->getName()] = false;
@@ -1127,23 +1158,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 				}
 			}
 		}
-
-		/*
-		 * TODO
-		 *
-		 *
-		 * Store basic block name in IRa
-		 * insert function setting the map value to 1 in ioc_report
-		 * insert function setting the map value to 0 in other bb
-		 *
-		 * insert map to IR. In main 
-		 * insert function before malloc to check map values
-		 *
-		 *
-		 * in case of full despair the plan is:
-		 * we will keep an array containing the values of all ioc bb in every
-		 * basic block and just update the corresponding value. 
-		 */
 #endif
 		if(fname == "__ioc_report_conversion") {
 			InfoflowSolution* fsoln = getForwSolConv(srcKind, ci);
@@ -1153,11 +1167,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 
 				//FIXME change this to false or remove
 				xformMap[ci] = true;
-
-				//create mvar, add it to the set for this particular malloc
-				//mvar = 1 inside the basic block
-				//mvar = 0 inside the next basic block, so that the same
-				//variable gets re-set if we don't go there.
 				return true;
 			} else {
 				dbg_err("checkForwardTainted:sens0:false");
@@ -1198,13 +1207,10 @@ InfoAppPass::addFunc(Module &M,
 {
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (checkBackwardTainted(*ii, soln)) {
-					DEBUG(ii->dump());
-
 					if (CallInst* ci = dyn_cast<CallInst>(ii)) {
 						addFuncInst(ci, M, sinkCI, ii, soln, kind);
 					}
@@ -1619,89 +1625,47 @@ InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 	}
 }
 
-
 #if 0
-#if 0
-								//std::vector index_vector;
-								//index_vector.push_back( ConstantSInt::get( ATy, 0 );
-								std::vector<Value*>new_idx;
-								new_idx.push_back(ConstantInt::get(M.getContext(), APInt(32, 0)));
-								new_idx.push_back(ConstantInt::get(M.getContext(), APInt(32, arr_n)));
+const CallTaintEntry *entry =
+	findEntryForFunction(sensSinkSummaries,
+							 func->getName());
+	if (entry->Name) {
 
-								Instruction *nextaddr = GetElementPtrInst::Create(tmpgl,
-																				  new_idx.begin(),
-																				  new_idx.end(),
-																				  "",
-																				  0);
-#endif
+		//find basic block of sensitive
+		BasicBlock *bb = ii->getParent();
+		std::string sinkKind = bb->getName();
+		dbg_msg("malloc:", sinkKind);
 
-				 	PointerType* arrayPtr = PointerType::get(IntegerType::get(M.getContext(), 32), 0);
- 
-					std::vector<Type*>FuncTy_args;
-					FuncTy_args.push_back(arrayPtr);
-					FuncTy_args.push_back(IntegerType::get(M.getContext(), 32));
-					FunctionType* FuncTy = FunctionType::get(
-									/*Result=*/IntegerType::get(M.getContext(), 32),
-									/*Params=*/FuncTy_args,
-									/*isVarArg=*/false);
+		BasicBlock *ioc_bb  = NULL;
+		BasicBlock *pred_bb = NULL;
+		//see parent blocks
+		Function *sensParentF = bb->getParent();
+		for (iplist<BasicBlock>::iterator iter = sensParentF->getBasicBlockList().begin();
+			 iter != sensParentF->getBasicBlockList().end();
+			 iter++) {
+			BasicBlock *currBB = iter;
+			
+			if (currBB->getTerminator()->getOpcode() == 2 && currBB->getTerminator()->getNumSuccessors() == 2) {
+				BasicBlock *suc0 = currBB->getTerminator()->getSuccessor(0);
+				BasicBlock *suc1 = currBB->getTerminator()->getSuccessor(1);
+				pred_bb = currBB;
+				if (suc0->getName() == sinkKind &&
+					StringRef(suc1->getName()).startswith("ioc_")) {
+					ioc_bb = suc1;
+					dbg_msg("aff. ioc: ", ioc_bb->getName());
+					dbg_msg("caller BB is : ", pred_bb->getName());
+					dbg_msg("sensitive is : ", sinkKind);
+					insertStoreInt32Inst(M.getContext(), "xvariable", 0, --inst_end(*sensParentF));
 
-
-					Function* func_foo = M.getFunction("foo");
-					if (!func_foo) {
-						func_foo = Function::Create(
-										/*Type=*/FuncTy,
-										/*Linkage=*/GlobalValue::ExternalLinkage,
-										/*Name=*/"foo", &M); 
-						func_foo->setCallingConv(CallingConv::C);
-					}
-
-#if 0
- Function::arg_iterator args = func_foo->arg_begin();
- Value* ptr_s = args++;
- ptr_s->setName("s");
- Value* int32_c = args++;
- int32_c->setName("c");
- 
- BasicBlock* label_entry = BasicBlock::Create(M.getContext(), "entry",func_foo,0);
- 
-#endif
- BasicBlock *label_entry = bb;
- // Block entry (label_entry)
- CastInst* int64_idxprom = new SExtInst(int32_c, IntegerType::get(M.getContext(), 64), "idxprom", label_entry);
- std::vector<Value*> ptr_arrayidx_indices;
- 
- ConstantInt* const_int64_6 = ConstantInt::get(M.getContext(), APInt(64, StringRef("0"), 10));
- ptr_arrayidx_indices.push_back(const_int64_6);
- ptr_arrayidx_indices.push_back(int64_idxprom);
-
- GetElementPtrInst* ptr_arrayidx = GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "arrayidx", label_entry);
- //LoadInst* int32_5 = new LoadInst(ptr_arrayidx, "", false, label_entry);
- //int32_5->setAlignment(4);
- //ReturnInst::Create(M.getContext(), int32_5, label_entry);
-
-								Function *f;
-								Instruction *injIns;
-
-								//argument just needed for string
-								Constant *fc = M.getOrInsertFunction("checkIoc", //name
-																	 Type::getInt32Ty(M.getContext()), //function type
-																	 arrayPtr,
-																	 Type::getInt32Ty(M.getContext()),//position variable
-																	 /*Linkage=*/GlobalValue::ExternalLinkage,
-																	 (Type *)0);
-								std::vector<Value *> fargs;
-								fargs.push_back(ptr_arrayidx);       
-								fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, ioc_cnt)));       
-
-								f = cast<Function>(fc);
-								ArrayRef<Value *> functionArguments(fargs);
-								injIns = CallInst::Create(f, functionArguments, "");
-								ci->getParent()->getInstList().insert(ci, injIns);
-							}
-					}
-				} 
+				} else if (suc1->getName() == sinkKind &&
+					StringRef(suc0->getName()).startswith("ioc_")) {
+					ioc_bb = suc0;
+					dbg_msg("affecting ioc: ", ioc_bb->getName());
+					dbg_msg("caller BB is : ", pred_bb->getName());
+					dbg_msg("sensitive is : ", sinkKind);
+				}
 			}
 		}
+
 	}
-}
 #endif
