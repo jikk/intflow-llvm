@@ -646,7 +646,6 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						 * slicing.
 						 */
 						bb = ci->getParent()->getSinglePredecessor();
-						dbg_msg("function: ", F.getName());
 						if (bb == NULL) {
 							/* 
 							 * problem...
@@ -765,31 +764,6 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 	removeBenignChecks(M);
 }
 
-
-std::string
-InfoAppPass::getStringKind(Function &F, CallInst *ci)
-{
-	std::stringstream SS;
-	
-	//Get function name that contains the CallInst
-	std::string tmp = F.getName();
-	SS << tmp;
-	SS << ":";
-	
-	//get called function
-	Function *func = ci->getCalledFunction();
-	tmp = func->getName();
-	SS << tmp;
-	SS << ":";
-
-	//get label inside bb
-	tmp = ci->getParent()->getName();
-	SS << tmp;
-	
-	std::string stringKind = SS.str();
-	return stringKind;
-}
-
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  searchSensitiveArithm
@@ -806,7 +780,6 @@ InfoAppPass::searchSensitiveArithm(Function &F, Module &M, CallInst *ci)
 	std::string srcKind = getStringKind(F, ci);
 	dbg_msg("searching ", srcKind);
 	
-#if 0
 	InfoflowSolution *fsoln = getForwardSol(srcKind, ci);
 
 	/*
@@ -814,10 +787,9 @@ InfoAppPass::searchSensitiveArithm(Function &F, Module &M, CallInst *ci)
 	 * if true, backward slice and check for ci.
 	 * Finally, add functions to the appropriate places
 	 */
-	if (backSensitiveArithm(M, ci)) {
+	if (backSensitiveArithm(M, ci, fsoln)) {
 		/* TODO: add check functions */
 	}
-#endif
 }
 /* -----  end of function searchSensitive  ----- */
 
@@ -851,7 +823,6 @@ InfoAppPass::backSensitiveArithm(Module &M,
 					if (!func)
 						continue;
 
-#if 0
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
@@ -864,29 +835,33 @@ InfoAppPass::backSensitiveArithm(Module &M,
 						 */
 
 						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
-							;
 							/* backward slicing needed */
-							std::string sinkKind = getKindId("sinkSens",
-															 &unique_id);
+							std::string sinkKind = getStringKind(F, ci);
 							infoflow->setUntainted(sinkKind,
 												   *(ci->getOperand(0)));
+							
+							dbg_err("here we should insert");
+							
 							std::set<std::string> kinds;
 							kinds.insert(sinkKind);
-							soln = infoflow->greatestSolution(kinds, false);
+							
+							InfoflowSolution *soln =
+								infoflow->greatestSolution(kinds, false);
+							
 							/*
 							 * FIXME: need to check: do all llvm{sadd, etc}
 							 * have the same two arguments in the same spots?
 							 */
-							if (checkBackwardTainted(*(sinkCI->getOperand(0)),
-																		soln) ||
-													*(sinkCI->getOperand(1),
-																		soln)) {
+							if (checkBackwardTainted(*(srcCI->getOperand(0)),
+													 soln) ||
+								checkBackwardTainted(*(srcCI->getOperand(1)),
+													   soln)) {
+								dbg_err("great success 2");
 									/* this one needs to be handled */
 									/* TODO: How to handle these cases? */
 							}
 						}
 					}
-#endif
 				}
 			}
 		}
@@ -1628,6 +1603,31 @@ InfoAppPass::getStringFromVal(Value* val, std::string& output)
 /*
  * Helper Functions
  */
+
+std::string
+InfoAppPass::getStringKind(Function &F, CallInst *ci)
+{
+	std::stringstream SS;
+	
+	//Get function name that contains the CallInst
+	std::string tmp = F.getName();
+	SS << tmp;
+	SS << ":";
+	
+	//get called function
+	Function *func = ci->getCalledFunction();
+	tmp = func->getName();
+	SS << tmp;
+	SS << ":";
+
+	//get label inside bb
+	tmp = ci->getParent()->getName();
+	SS << tmp;
+	
+	std::string stringKind = SS.str();
+	return stringKind;
+}
+
 std::string
 InfoAppPass::getKindId(std::string name, uint64_t *unique_id)
 {
@@ -1635,7 +1635,6 @@ InfoAppPass::getKindId(std::string name, uint64_t *unique_id)
 	SS << (*unique_id)++;
 	return name + SS.str();
 }
-
 
 /* 
  * ===  FUNCTION  =============================================================
