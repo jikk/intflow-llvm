@@ -91,6 +91,12 @@ class InfoAppPass : public ModulePass {
 					   CallInst *ci,
 					   InfoflowSolution* soln,
 					   std::string& s);
+
+	bool backSensitiveArithm(Module &M,
+							 CallInst *ci,
+							 InfoflowSolution* soln);
+
+	void searchSensitiveArithm(Function &F, Module &M, CallInst *ci);
 	void addFunc(Module &M,
 				   InfoflowSolution* soln,
 				   CallInst* sinkCI,
@@ -117,17 +123,18 @@ class InfoAppPass : public ModulePass {
 												 const CallTaintEntry *entry,
 												 uint64_t *id);
 
-	InfoflowSolution *getForwardSol(std::string s,
-									CallInst *ci,
-									const CallTaintEntry *entry);
-	InfoflowSolution *getBackwardsSol(std::string s,
-									  CallInst *ci,
-									  const CallTaintEntry *entry);
+	InfoflowSolution *getForwardSolFromEntry(std::string s,
+											 CallInst *ci,
+											 const CallTaintEntry *entry);
+	InfoflowSolution *getBackwardsSolFromEntry(std::string s,
+											   CallInst *ci,
+											   const CallTaintEntry *entry);
+	InfoflowSolution *getForwardSol(std::string s, CallInst *ci);
+	InfoflowSolution *getBackwardsSol(std::string s, CallInst *ci);
 	InfoflowSolution *getBackSolArithm(std::string s, CallInst *ci);
 	InfoflowSolution *getForwSolArithm(std::string s, CallInst *ci);
 	InfoflowSolution *getForwSolConv(std::string s, CallInst *ci);
 	InfoflowSolution *getBackSolConv(std::string s, CallInst *ci);
-	void searchSensitiveArithm(Module &M, CallInst *ci);	
     
 	void removeBenignChecks(Module &M);
     void checkfTainted(Module &M, InfoflowSolution *f);
@@ -156,6 +163,7 @@ class InfoAppPass : public ModulePass {
 	uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
 	std::string getKindId(std::string name, uint64_t *id);
+	std::string getStringKind(Function &F, CallInst *ci);
 
 };  //class
   

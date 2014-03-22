@@ -475,7 +475,7 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	std::vector<Value*> ptr_arrayidx_indices;
 	ConstantInt* c_int32 = ConstantInt::get(M.getContext(),
 											APInt(64, StringRef("0"), 10));
-	Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);								
+	Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);					
 	ptr_arrayidx_indices.push_back(c_int32);
 	ptr_arrayidx_indices.push_back(array_idx);
 	
@@ -646,28 +646,38 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						 * slicing.
 						 */
 						bb = ci->getParent()->getSinglePredecessor();
+						dbg_msg("function: ", F.getName());
 						if (bb == NULL) {
-							/* problem...
+							/* 
+							 * problem...
 							 * we should probably use a bb iterator and
 							 * use that in order to get the predecessor
-							 * */
-							errs() << "Problem obtaining the predecessor of an"
-									<< "arithmetic operation\n";
+							 */
+							dbg_err("Could not get predecessor (arithm)");
 							continue;
 						}
-						for (BasicBlock::iterator pii = bb.begin();
-															pii != bb.end();
-															pii++) {
-							if (CallInst *cii = dyn_cast<CallInst>(cii)) {
-								if (llvm_arithm(cii->getCalledFunction()->getName())) {
+						
+						/* Get parent basic block instructions */
+						BasicBlock& BP = *bb;
+						for (BasicBlock::iterator pii = BP.begin();
+							 pii != BP.end();
+							 pii++) {
+							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
+								cinst->dump();
+								
+								std::string cfname = 
+									cinst->getCalledFunction()->getName();
+
+								if (llvm_arithm(cfname)) {
 									/*
 									 * use this instruction as the taint source
 									 */
-									searchSensitiveiArithm(M, cii);
+									searchSensitiveArithm(F, M, cinst);
 									break;
 								}
 							}
 						}	
+					
 					} else if (ioc_report_shl(func->getName())) {
 						/*
 						 * get the first instruction in the next basic
@@ -705,7 +715,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						dbg_msg("bb :", bb->getName());
 						
 						std::string sinkKind = bb->getName();
-						InfoflowSolution *soln = getBackwardsSol(sinkKind,
+						InfoflowSolution *soln = getBackwardsSolFromEntry(sinkKind,
 																 ci,
 																 entry);
 
@@ -756,6 +766,30 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 }
 
 
+std::string
+InfoAppPass::getStringKind(Function &F, CallInst *ci)
+{
+	std::stringstream SS;
+	
+	//Get function name that contains the CallInst
+	std::string tmp = F.getName();
+	SS << tmp;
+	SS << ":";
+	
+	//get called function
+	Function *func = ci->getCalledFunction();
+	tmp = func->getName();
+	SS << tmp;
+	SS << ":";
+
+	//get label inside bb
+	tmp = ci->getParent()->getName();
+	SS << tmp;
+	
+	std::string stringKind = SS.str();
+	return stringKind;
+}
+
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  searchSensitiveArithm
@@ -767,16 +801,14 @@ InfoAppPass::runOnModuleSensitive(Module &M)
  * ============================================================================
  */
 void
-InfoAppPass::searchSensitiveArithm (Module &M, CallInst *ci)
+InfoAppPass::searchSensitiveArithm(Function &F, Module &M, CallInst *ci)
 {
-	Function *func = ci->getCalledFunction();
-	std::set<std::string> kinds;
-	dbg_msg("sensitive:", func->getName());
-	std::string srcKind = getKindId("sens", &unique_id);
-	unique_id++;
-	infoflow->setTainted(srcKind, *ci);
-	kinds.insert(srcKind);
-	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
+	std::string srcKind = getStringKind(F, ci);
+	dbg_msg("searching ", srcKind);
+	
+#if 0
+	InfoflowSolution *fsoln = getForwardSol(srcKind, ci);
+
 	/*
 	 * iterate the instructions and check if there are tainted sensitive sinks
 	 * if true, backward slice and check for ci.
@@ -785,6 +817,7 @@ InfoAppPass::searchSensitiveArithm (Module &M, CallInst *ci)
 	if (backSensitiveArithm(M, ci)) {
 		/* TODO: add check functions */
 	}
+#endif
 }
 /* -----  end of function searchSensitive  ----- */
 
@@ -802,13 +835,14 @@ InfoAppPass::searchSensitiveArithm (Module &M, CallInst *ci)
  * ============================================================================
  */
 bool
-InfoAppPass::backSensitiveArithm (Module &M,
-									CallInst *srcCI,
-									InfoflowSolution *fsoln)
+InfoAppPass::backSensitiveArithm(Module &M,
+								 CallInst *srcCI,
+								 InfoflowSolution *fsoln)
 {
-	CallTaintEntry *entry;
-	InfoflowSolution *soln;
+	Function *func;
+
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 			BasicBlock& B = *bi;
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
@@ -816,8 +850,11 @@ InfoAppPass::backSensitiveArithm (Module &M,
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
-					entry = findEntryForFunction(sensSinkSummaries,
-														func->getName());
+
+#if 0
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSinkSummaries,
+											 func->getName());
 					if (entry->Name) {
 						/* this is a sensitive function */
 						
@@ -827,11 +864,12 @@ InfoAppPass::backSensitiveArithm (Module &M,
 						 */
 
 						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
+							;
 							/* backward slicing needed */
 							std::string sinkKind = getKindId("sinkSens",
-																	&unique_id);
+															 &unique_id);
 							infoflow->setUntainted(sinkKind,
-														  *(ci->getOperand(0)));
+												   *(ci->getOperand(0)));
 							std::set<std::string> kinds;
 							kinds.insert(sinkKind);
 							soln = infoflow->greatestSolution(kinds, false);
@@ -848,10 +886,12 @@ InfoAppPass::backSensitiveArithm (Module &M,
 							}
 						}
 					}
+#endif
 				}
 			}
 		}
 	}
+	return false;
 }
 /* -----  end of function backSensitiveArithm  ----- */
 
@@ -898,7 +938,7 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 							continue;
 #endif
 						std::string srcKind = getKindId("src", &unique_id);
-						fsoln = getForwardSol(srcKind, ci, entry);
+						fsoln = getForwardSolFromEntry(srcKind, ci, entry);
 
 						backwardSlicingBlacklisting(M, fsoln, ci);
 					}  else if ((func->getName() == "div")   ||
@@ -1051,7 +1091,7 @@ InfoAppPass::removeChecksInst(CallInst *ci, unsigned int i, Module &M)
  * ****************************************************************************/
 
 InfoflowSolution *
-InfoAppPass::getForwardSol(std::string srcKind,
+InfoAppPass::getForwardSolFromEntry(std::string srcKind,
 								 CallInst *ci,
 								 const CallTaintEntry *entry)
 {
@@ -1069,13 +1109,42 @@ InfoAppPass::getForwardSol(std::string srcKind,
 }
 
 InfoflowSolution *
-InfoAppPass::getBackwardsSol(std::string sinkKind,
+InfoAppPass::getBackwardsSolFromEntry(std::string sinkKind,
 							 CallInst *ci,
 							 const CallTaintEntry *entry)
 {
 	
 	//XXX Do not change order
 	taintBackwards(sinkKind, ci, entry);
+	
+	std::set<std::string> kinds;
+	kinds.insert(sinkKind);
+	
+	InfoflowSolution *fsoln = infoflow->greatestSolution(kinds, false);
+
+	return fsoln;
+}
+
+InfoflowSolution *
+InfoAppPass::getForwardSol(std::string srcKind, CallInst *ci)
+{
+	
+	//FIXME taint Direct pointers as well?
+	infoflow->setTainted(srcKind, *ci);
+	
+	std::set<std::string> kinds;
+	kinds.insert(srcKind);
+	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
+	
+	return fsoln;
+}
+
+InfoflowSolution *
+InfoAppPass::getBackwardsSol(std::string sinkKind, CallInst *ci)
+{
+	
+	//XXX Do not change order
+	infoflow->setUntainted(sinkKind, *ci);
 	
 	std::set<std::string> kinds;
 	kinds.insert(sinkKind);
@@ -1216,7 +1285,7 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		dbg_msg("white-list:", fname);
 		std::string srcKind = "src0" + kind;
 
-		InfoflowSolution* fsoln = getForwardSol(srcKind, ci, entry);
+		InfoflowSolution* fsoln = getForwardSolFromEntry(srcKind, ci, entry);
 		
 		Function* sinkFunc = sinkCI->getCalledFunction();
 		if(sinkFunc->getName() == "__ioc_report_conversion")
@@ -1250,7 +1319,7 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	if (entry->Name && mode == BLACKLISTING) {
 		dbg_msg("black-list: ", fname);
 		std::string srcKind = "src1" + kind;
-		InfoflowSolution* fsoln = getForwardSol(srcKind, ci, entry);
+		InfoflowSolution* fsoln = getForwardSolFromEntry(srcKind, ci, entry);
 		
 		Function* sinkFunc = sinkCI->getCalledFunction();
 		if(sinkFunc->getName() == "__ioc_report_conversion") {
@@ -1517,6 +1586,17 @@ InfoAppPass::ioc_report_shl(std::string name)
 			name == "__ioc_report_shl_strict");
 }
 
+/* FIXME should we add llvm.fmuladd.* */
+bool
+InfoAppPass::llvm_arithm(std::string name)
+{
+	return (StringRef(name).startswith("llvm.sadd.with.overflow") ||
+			StringRef(name).startswith("llvm.uadd.with.overflow") ||
+			StringRef(name).startswith("llvm.ssub.with.overflow") ||
+			StringRef(name).startswith("llvm.usub.with.overflow") ||
+			StringRef(name).startswith("llvm.smul.with.overflow") ||
+			StringRef(name).startswith("llvm.umul.with.overflow"));
+}
 
 /* ****************************************************************************
  * ============================================================================
