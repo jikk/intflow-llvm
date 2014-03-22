@@ -127,7 +127,7 @@ class InfoAppPass : public ModulePass {
 	InfoflowSolution *getForwSolArithm(std::string s, CallInst *ci);
 	InfoflowSolution *getForwSolConv(std::string s, CallInst *ci);
 	InfoflowSolution *getBackSolConv(std::string s, CallInst *ci);
-	
+	void searchSensitiveArithm(Module &M, CallInst *ci);	
     
 	void removeBenignChecks(Module &M);
     void checkfTainted(Module &M, InfoflowSolution *f);
@@ -137,6 +137,7 @@ class InfoAppPass : public ModulePass {
 	bool ioc_report_all(std::string s);
 	bool ioc_report_arithm(std::string s);
 	bool ioc_report_shl(std::string s);
+	bool llvm_arithm(std::string s);
     
 	bool checkBackwardTainted(Value &V,
 							  InfoflowSolution* soln,

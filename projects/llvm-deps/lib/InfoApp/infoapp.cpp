@@ -92,8 +92,8 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	}
 	else if (mode == SENSITIVE) {
 		dbg_err("Sensitive");
-		runTest(M);
-		//runOnModuleSensitive(M);
+		//runTest(M);
+		runOnModuleSensitive(M);
 	}
 	else if (mode == BLACK_SENSITIVE) {
 		/* TODO: to be added */
@@ -624,6 +624,7 @@ void
 InfoAppPass::runOnModuleSensitive(Module &M)
 {
 	Function *func;
+	BasicBlock *bb;
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		removeChecksForFunction(F, M);
@@ -636,8 +637,63 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
-
-
+					if (ioc_report_arithm(func->getName())) {
+						/*
+						 * Get the output of the llvm.{ssad, ssub, smul,
+						 * uadd, usub, umul}
+						 * function in the parent basic block
+						 * and use this as the taint source for forward
+						 * slicing.
+						 */
+						bb = ci->getParent()->getSinglePredecessor();
+						if (bb == NULL) {
+							/* problem...
+							 * we should probably use a bb iterator and
+							 * use that in order to get the predecessor
+							 * */
+							errs() << "Problem obtaining the predecessor of an"
+									<< "arithmetic operation\n";
+							continue;
+						}
+						for (BasicBlock::iterator pii = bb.begin();
+															pii != bb.end();
+															pii++) {
+							if (CallInst *cii = dyn_cast<CallInst>(cii)) {
+								if (llvm_arithm(cii->getCalledFunction()->getName())) {
+									/*
+									 * use this instruction as the taint source
+									 */
+									searchSensitiveiArithm(M, cii);
+									break;
+								}
+							}
+						}	
+					} else if (ioc_report_shl(func->getName())) {
+						/*
+						 * get the first instruction in the next basic
+						 * block and use this as the taint source. This
+						 * should be used with __ioc_report_shl_strict and
+						 * __ioc_report_shr_bitwidth. For shl_bitwidth
+						 * go 2 basic blocks "higher" (parent of parent)
+						 * than __ioc_report_shl_strict
+						 * and check for __ioc_report_shl_bitwidth.
+						 */
+					} else if (func->getName() == "__ioc_report_conversion") {
+						/*
+						 * do what???
+						 */
+					} else if (func->getName() == "__ioc_report_div_error") {
+						/*
+						 * go to the next basic block and use the first
+						 * instruction as the taint source.
+						 */
+					} else {
+						/*
+						 * do nothing. Left as a placeholder in case I
+						 * missed something
+						 */
+					}
+#if 0
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
@@ -690,6 +746,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							   (func->getName() == "iconv")) {
 						setWrapper(ci, M, func);
 					}
+#endif
 				}
 			} /* for-loops close here*/
 		}
@@ -697,6 +754,83 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 	
 	removeBenignChecks(M);
 }
+
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  searchSensitiveArithm
+ *  Description:  Implements the sensitive pass starting from arithmetic
+ *  			  operations.
+ *    Arguments:  @M - the source code module
+ *    			  @ci - the llvm{sadd, ssub, smul, uadd, usub, umul} function
+ *    			  call
+ * ============================================================================
+ */
+void
+InfoAppPass::searchSensitiveArithm (Module &M, CallInst *ci)
+{
+	Function *func = ci->getCalledFunction();
+	std::set<std::string> kinds;
+	dbg_msg("sensitive:", func->getName());
+	std::string srcKind = getKindId("sens", &unique_id);
+	unique_id++;
+	infoflow->setTainted(srcKind, *ci);
+	kinds.insert(srcKind);
+	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
+	/*
+	 * iterate the instructions and check if there are tainted sensitive sinks
+	 * if true, backward slice and check for ci.
+	 * Finally, add functions to the appropriate places
+	 */
+	if (backSensitiveArithm(M, ci)) {
+		/* TODO: add check functions */
+	}
+}
+/* -----  end of function searchSensitive  ----- */
+
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  backSensitiveArithm
+ *  Description:  
+ *    Arguments:  
+ * ============================================================================
+ */
+bool
+InfoAppPass::backSensitiveArithm (Module &M,
+									CallInst *srcCI,
+									InfoflowSolution *fsoln)
+{
+	CallTaintEntry *entry;
+	InfoflowSolution *soln;
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					entry = findEntryForFunction(sensSinkSummaries,
+														func->getName());
+					if (entry->Name) {
+						/* this is a sensitive function */
+						
+						/* TODO: need a way to handle different functions too
+						 * (apart from malloc)
+						 * XXX: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
+						 */
+
+						if (checkForwardTainted(*ci->getOperand(0), fsoln )) {
+							/* backward slicing needed */
+						}
+					}
+				}
+			}
+		}
+	}
+}
+/* -----  end of function backSensitiveArithm  ----- */
 
 /* 
  * ===  FUNCTION  =============================================================
