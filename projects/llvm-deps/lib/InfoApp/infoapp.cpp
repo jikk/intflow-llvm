@@ -792,8 +792,13 @@ InfoAppPass::searchSensitiveArithm (Module &M, CallInst *ci)
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  backSensitiveArithm
- *  Description:  
- *    Arguments:  
+ *  Description:  Iterates over the instructions looking for sensitive
+ *  			  functions that are forward tainted. It uses backward slicing
+ *  			  to determine if forward slicing is accurate. Then it handles
+ *  			  those that are actually correct
+ *    Arguments:  @M - the source code module
+ *    			  @srcCI - the arithmetic operation used for forward tainting
+ *    			  @fsoln - the forward slicing solution
  * ============================================================================
  */
 bool
@@ -818,11 +823,29 @@ InfoAppPass::backSensitiveArithm (Module &M,
 						
 						/* TODO: need a way to handle different functions too
 						 * (apart from malloc)
-						 * XXX: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
+						 * FIXME: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
 						 */
 
-						if (checkForwardTainted(*ci->getOperand(0), fsoln )) {
+						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
 							/* backward slicing needed */
+							std::string sinkKind = getKindId("sinkSens",
+																	&unique_id);
+							infoflow->setUntainted(sinkKind,
+														  *(ci->getOperand(0)));
+							std::set<std::string> kinds;
+							kinds.insert(sinkKind);
+							soln = infoflow->greatestSolution(kinds, false);
+							/*
+							 * FIXME: need to check: do all llvm{sadd, etc}
+							 * have the same two arguments in the same spots?
+							 */
+							if (checkBackwardTainted(*(sinkCI->getOperand(0)),
+																		soln) ||
+													*(sinkCI->getOperand(1),
+																		soln)) {
+									/* this one needs to be handled */
+									/* TODO: How to handle these cases? */
+							}
 						}
 					}
 				}
