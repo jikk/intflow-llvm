@@ -832,9 +832,12 @@ void
 InfoAppPass::insertIOCChecks(Module &M)
 {
 
-	uint64_t glA_pos = 0;
+	GlobalVariable *glA = NULL;
 	Function *func;
+	BasicBlock *bb;
 	
+	uint64_t glA_pos = 0;
+
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -870,30 +873,21 @@ InfoAppPass::insertIOCChecks(Module &M)
 							glA_pos = svi - spv.begin();
 
 							//create the respective global array
-							GlobalVariable *glA = getGlobalArray(M, sink);
+							glA = getGlobalArray(M, sink);
 
 							//insert the check before the operation
 							insertIntFlowFunction(M, "setTrueIOC",
 												  ci, ii, glA, glA_pos); 
 						}
 					}
-#if 0
+
+					//Now we definitely have an entry in this IOC, on to add
+					//the setFalseIOC, 
 					if (ioc_report_arithm(func->getName())) {
-						/*
-						 * Get the output of the llvm.{ssad, ssub, smul,
-						 * uadd, usub, umul}
-						 * function in the parent basic block
-						 * and use this as the taint source for forward
-						 * slicing.
-						 */
+						
 						bb = ci->getParent()->getSinglePredecessor();
 						if (bb == NULL) {
-							/* 
-							 * problem...
-							 * we should probably use a bb iterator and
-							 * use that in order to get the predecessor
-							 */
-							dbg_err("Could not get predecessor (arithm)");
+							dbg_err("Could not get predecessor (arithm2)");
 							continue;
 						}
 						
@@ -903,47 +897,22 @@ InfoAppPass::insertIOCChecks(Module &M)
 							 pii != BP.end();
 							 pii++) {
 							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
-								std::string cfname = 
-									cinst->getCalledFunction()->getName();
 
-								if (llvm_arithm(cfname)) {
-									/*
-									 * use this instruction as the taint source
-									 * search for sensitive sink starting from
-									 * cinst
-									 */
-									searchSensitiveArithm(F, M, iocKind, cinst);
-									break;
-								}
+								insertIntFlowFunction(M, "setFalseIOC", cinst,
+													  pii, glA, glA_pos);
+								break;
 							}
 						}	
 					
 					} else if (ioc_report_shl(func->getName())) {
-						/*
-						 * get the first instruction in the next basic
-						 * block and use this as the taint source. This
-						 * should be used with __ioc_report_shl_strict and
-						 * __ioc_report_shr_bitwidth. For shl_bitwidth
-						 * go 2 basic blocks "higher" (parent of parent)
-						 * than __ioc_report_shl_strict
-						 * and check for __ioc_report_shl_bitwidth.
-						 */
+						;
 					} else if (func->getName() == "__ioc_report_conversion") {
-						/*
-						 * do what???
-						 */
+						;
 					} else if (func->getName() == "__ioc_report_div_error") {
-						/*
-						 * go to the next basic block and use the first
-						 * instruction as the taint source.
-						 */
+						;
 					} else {
-						/*
-						 * do nothing. Left as a placeholder in case I
-						 * missed something
-						 */
+						;
 					}
-#endif
 				}
 			}
 		}
