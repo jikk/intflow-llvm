@@ -884,8 +884,8 @@ InfoAppPass::insertIOCChecks(Module &M)
 						}
 					}
 
-					//Now we definitely have an entry in this IOC, on to add
-					//the setFalseIOC, 
+					//Now we definitely have a sens sink related with this IOC,
+					//on to add the setFalseIOC, 
 					if (ioc_report_arithm(func->getName())) {
 						
 						bb = ci->getParent()->getSinglePredecessor();
@@ -896,6 +896,7 @@ InfoAppPass::insertIOCChecks(Module &M)
 						
 						/* Get parent basic block instructions */
 						BasicBlock& BP = *bb;
+						dbg_msg("setting False in ", bb->getName());
 						for (BasicBlock::iterator pii = BP.begin();
 							 pii != BP.end();
 							 pii++) {
@@ -905,16 +906,18 @@ InfoAppPass::insertIOCChecks(Module &M)
 													  pii, glA, glA_pos);
 								break;
 							}
-						}	
+						}
+
+						continue;
 					
 					} else if (ioc_report_shl(func->getName())) {
-						;
+						continue;
 					} else if (func->getName() == "__ioc_report_conversion") {
-						;
+						continue;
 					} else if (func->getName() == "__ioc_report_div_error") {
-						;
+						continue;
 					} else {
-						;
+						continue;
 					}
 				}
 			}
@@ -1750,48 +1753,3 @@ InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 		//    assert(! "invalid function name");
 	}
 }
-
-#if 0
-const CallTaintEntry *entry =
-	findEntryForFunction(sensSinkSummaries,
-							 func->getName());
-	if (entry->Name) {
-
-		//find basic block of sensitive
-		BasicBlock *bb = ii->getParent();
-		std::string sinkKind = bb->getName();
-		dbg_msg("malloc:", sinkKind);
-
-		BasicBlock *ioc_bb  = NULL;
-		BasicBlock *pred_bb = NULL;
-		//see parent blocks
-		Function *sensParentF = bb->getParent();
-		for (iplist<BasicBlock>::iterator iter = sensParentF->getBasicBlockList().begin();
-			 iter != sensParentF->getBasicBlockList().end();
-			 iter++) {
-			BasicBlock *currBB = iter;
-			
-			if (currBB->getTerminator()->getOpcode() == 2 && currBB->getTerminator()->getNumSuccessors() == 2) {
-				BasicBlock *suc0 = currBB->getTerminator()->getSuccessor(0);
-				BasicBlock *suc1 = currBB->getTerminator()->getSuccessor(1);
-				pred_bb = currBB;
-				if (suc0->getName() == sinkKind &&
-					StringRef(suc1->getName()).startswith("ioc_")) {
-					ioc_bb = suc1;
-					dbg_msg("aff. ioc: ", ioc_bb->getName());
-					dbg_msg("caller BB is : ", pred_bb->getName());
-					dbg_msg("sensitive is : ", sinkKind);
-					insertStoreInt32Inst(M.getContext(), "xvariable", 0, --inst_end(*sensParentF));
-
-				} else if (suc1->getName() == sinkKind &&
-					StringRef(suc0->getName()).startswith("ioc_")) {
-					ioc_bb = suc0;
-					dbg_msg("affecting ioc: ", ioc_bb->getName());
-					dbg_msg("caller BB is : ", pred_bb->getName());
-					dbg_msg("sensitive is : ", sinkKind);
-				}
-			}
-		}
-
-	}
-#endif
