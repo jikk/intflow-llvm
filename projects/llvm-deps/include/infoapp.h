@@ -104,16 +104,7 @@ class InfoAppPass : public ModulePass {
 							   Module &M,
 							   std::string iocKind,
 							   CallInst *ci);
-	void addFunc(Module &M,
-				   InfoflowSolution* soln,
-				   CallInst* sinkCI,
-				   std::string& kinds);
-	void addFuncInst(CallInst *i,
-					   Module &M,
-					   CallInst *ci,
-					   BasicBlock::iterator ii,
-					   InfoflowSolution* soln,
-					   std::string& s);
+	
 	void backwardSlicingBlacklisting(Module &M,
 									 InfoflowSolution* fsoln,
 									 CallInst* srcCI);
