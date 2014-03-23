@@ -639,6 +639,23 @@ InfoAppPass::populateMapsSensitive(Module &M)
 						 * than __ioc_report_shl_strict
 						 * and check for __ioc_report_shl_bitwidth.
 						 */
+						
+						//get next BB
+						bi++;
+						dbg_err("found shift instruction");
+						BasicBlock& BP = *bi;
+						for (BasicBlock::iterator pii = BP.begin();
+							 pii != BP.end();
+							 pii++) {
+							
+							pii->dump();
+						}
+
+						//restore BB
+						bi--;
+
+						continue;
+
 					} else if (func->getName() == "__ioc_report_conversion") {
 						/*
 						 * do what???
@@ -859,6 +876,8 @@ InfoAppPass::insertIOCChecks(Module &M)
 
 						//get unique id for this ioc
 						iocKind = getStringKind(F, ci);
+						
+						//see how many sensitive sinks we have for iocKind
 						if (sensPoints[iocKind].empty())
 							continue;
 
@@ -870,54 +889,63 @@ InfoAppPass::insertIOCChecks(Module &M)
 							svi != spv.end();
 							++svi) {
 
-
 							std::string sink = *svi;
-							//get position of this IOC in the sens sink
-							glA_pos = svi - spv.begin();
-
+							
+							//get position of this IOC in the sens sink array
+							iocPointVector ipv = iocPoints[sink];
+							glA_pos = find(ipv.begin(), ipv.end(), iocKind) - 
+								ipv.begin();
+							
 							//create the respective global array
 							glA = getGlobalArray(M, sink);
 
 							//insert the check before the operation
 							insertIntFlowFunction(M, "setTrueIOC",
 												  ci, ii, glA, glA_pos); 
-						}
-					}
 
-					//Now we definitely have a sens sink related with this IOC,
-					//on to add the setFalseIOC, 
-					if (ioc_report_arithm(func->getName())) {
-						
-						bb = ci->getParent()->getSinglePredecessor();
-						if (bb == NULL) {
-							dbg_err("Could not get predecessor (arithm2)");
-							continue;
-						}
-						
-						/* Get parent basic block instructions */
-						BasicBlock& BP = *bb;
-						dbg_msg("setting False in ", bb->getName());
-						for (BasicBlock::iterator pii = BP.begin();
-							 pii != BP.end();
-							 pii++) {
-							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
+							//Now we definitely have a sens sink related 
+							//with this IOC, on to add the setFalseIOC, 
+							if (ioc_report_arithm(func->getName())) {
 
-								insertIntFlowFunction(M, "setFalseIOC", cinst,
-													  pii, glA, glA_pos);
-								break;
+								bb = ci->getParent()->getSinglePredecessor();
+								if (bb == NULL) {
+									dbg_err("Could not get pred. (arithm2)");
+									continue;
+								}
+
+								/* Get parent basic block instructions */
+								BasicBlock& BP = *bb;
+								dbg_msg("setting False in ", bb->getName());
+								for (BasicBlock::iterator pii = BP.begin();
+									 pii != BP.end();
+									 pii++) {
+
+									//FIXME do we need CallInst here?
+									if (CallInst *cinst = 
+										dyn_cast<CallInst>(pii)) {
+
+										insertIntFlowFunction(M,
+															  "setFalseIOC",
+															  cinst,
+															  pii,
+															  glA,
+															  glA_pos);
+										break;
+									}
+								}
+
+								continue;
+
+							} else if (ioc_report_shl(func->getName())) {
+								continue;
+							} else if (func->getName() == "__ioc_report_conversion") {
+								continue;
+							} else if (func->getName() == "__ioc_report_div_error") {
+								continue;
+							} else {
+								continue;
 							}
 						}
-
-						continue;
-					
-					} else if (ioc_report_shl(func->getName())) {
-						continue;
-					} else if (func->getName() == "__ioc_report_conversion") {
-						continue;
-					} else if (func->getName() == "__ioc_report_div_error") {
-						continue;
-					} else {
-						continue;
 					}
 				}
 			}
