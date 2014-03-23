@@ -850,32 +850,31 @@ InfoAppPass::insertIOCChecks(Module &M)
 					std::string iocKind = "";
 
 					if (StringRef(func->getName()).startswith("__ioc")) {
+
 						//get unique id for this ioc
 						iocKind = getStringKind(F, ci);
-						for (sensPointsForIOC::const_iterator sens_p =
-							 sensPoints.begin();
-							 sens_p != sensPoints.end();
-							 ++sens_p) {
+						if (sensPoints[iocKind].empty())
+							continue;
 
-							sensPointVector spv = sens_p->second;
-							for(sensPointVector::const_iterator svi =
-								spv.begin();
-								svi != spv.end();
-								++svi) {
-								
-								std::string sink = *svi;
-								//get position
-								//FIXME
-								glA_pos = 0;
-								//glA_pos = iocPoints[sink].find(iocKind);
-								
-								//create the respective global array
-								GlobalVariable *glA = getGlobalArray(M, sink);
+						sensPointVector spv = sensPoints[iocKind];
+						
+						// Insert one check for each malloc
+						for(sensPointVector::const_iterator svi =
+							spv.begin();
+							svi != spv.end();
+							++svi) {
 
-								//insert the check before the operation
-								insertIntFlowFunction(M, "setTrueIOC",
-													  ci, ii, glA, glA_pos); 
-							}
+
+							std::string sink = *svi;
+							//get position of this IOC in the sens sink
+							glA_pos = svi - spv.begin();
+
+							//create the respective global array
+							GlobalVariable *glA = getGlobalArray(M, sink);
+
+							//insert the check before the operation
+							insertIntFlowFunction(M, "setTrueIOC",
+												  ci, ii, glA, glA_pos); 
 						}
 					}
 #if 0
