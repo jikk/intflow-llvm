@@ -545,7 +545,7 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						continue;
 
 					//remove all ioc_checks
-					xformMap[ci] = true;
+					xformMap[ci] = false;
 				}
 			}
 		}
@@ -689,6 +689,7 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 					if (entry->Name) {
 						std::string sinkKind = getStringKind(F, ci);
 						
+						dbg_msg("creating global array for ", sinkKind);
 						//get all ioc checks that lead to this sink
 						uint64_t totalIOC = iocPoints[sinkKind].size();
 
@@ -804,7 +805,9 @@ InfoAppPass::backSensitiveArithm(Module &M,
 								
 								//add sens sink to this ioc
 								sensPoints[iocKind].push_back(sinkKind);
-
+								dbg_err("*************************");
+								dbg_msg("sink : ", sinkKind);
+								dbg_msg("adding ioc: ", iocKind);
 								//and add ioc the sens sink list
 								iocPoints[sinkKind].push_back(iocKind);
 									/* this one needs to be handled */
