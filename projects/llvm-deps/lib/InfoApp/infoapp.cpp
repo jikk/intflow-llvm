@@ -475,7 +475,7 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	std::vector<Value*> ptr_arrayidx_indices;
 	ConstantInt* c_int32 = ConstantInt::get(M.getContext(),
 											APInt(64, StringRef("0"), 10));
-	Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);					
+	Value *array_idx = ConstantInt::get(Type::getInt32Ty(M.getContext()), 0);
 	ptr_arrayidx_indices.push_back(c_int32);
 	ptr_arrayidx_indices.push_back(array_idx);
 	
@@ -511,104 +511,6 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	ci->getParent()->getInstList().insert(ci, iocCheck);
 }
 
-void
-InfoAppPass::runTest(Module &M)
-{
-	Function *func;
-	//Do a first pass and count ioc and sens entries
-	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-		Function& F = *mi;
-		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-			BasicBlock& B = *bi;
-			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-
-				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-
-					func = ci->getCalledFunction();
-					if (!func)
-						continue;
-
-					BasicBlock *bb = ii->getParent();
-
-					if (StringRef(func->getName()).startswith("__ioc_")) {
-
-						llvm::errs() << "---------------------------------"<< "\n";
-						llvm::errs() << "" << func->getName() << ":";
-						llvm::errs() << bb->getName() << "\n\n";
-
-						//	BasicBlock *next_bb  = NULL;
-						//	BasicBlock *caller_bb = NULL;
-						int ret = 0;
-						Function *sensParentF = bb->getParent();
-						for (iplist<BasicBlock>::iterator iter = 
-							 sensParentF->getBasicBlockList().begin();
-							 iter != sensParentF->getBasicBlockList().end();
-							 iter++) {
-							if (iter->getTerminator()->getOpcode() == 2 &&
-								iter->getTerminator()->getNumSuccessors() == 2) {
-
-								BasicBlock *suc0 = iter->getTerminator()->getSuccessor(0);
-								BasicBlock *suc1 = iter->getTerminator()->getSuccessor(1);
-								if (StringRef(suc1->getName()).startswith("ioc_")) {
-									dbg_msg("------parent is: ", iter->getName());
-									dbg_msg("------current: ", suc1->getName());
-									dbg_msg("------next: ", suc0->getName());
-
-									BasicBlock& B = *iter;
-									for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-										ii->dump();
-										ret = 0;
-										infoflow->setTainted(sensParentF->getName(), *ii);
-										std::set<std::string> kinds;
-										kinds.insert(sensParentF->getName());
-
-										InfoflowSolution *fsoln = 
-											infoflow->leastSolution(kinds, false, true);
-
-
-										for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
-											Function& F = *mi;
-
-											for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
-												BasicBlock& B = *bi;
-												for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
-													if (CallInst* ci = dyn_cast<CallInst>(ii)) {
-														Function* func = ci->getCalledFunction();
-														std::string fname = func->getName();
-														if (fname == "malloc")
-															if (checkForwardTainted(*(ci->getOperand(0)), fsoln)) {
-																dbg_err("found malloc\n");
-																ret = 1;
-																break;
-															}
-													}
-												}
-											}
-										}
-
-										if (ret == 1) {
-											ret = 0;
-											break;
-										}
-									}
-								}
-							}
-						}
-					}
-#if 0			
-					if (ioc_report_all_but_conv(func->getName())) {
-						InfoflowSolution* soln = getBackSolArithm(sinkKind, ci);
-						trackSoln(M, soln, ci, sinkKind);
-					} else if (func->getName() == "__ioc_report_conversion") {
-						InfoflowSolution* soln = getBackSolConv(sinkKind, ci);
-						trackSoln(M, soln, ci, sinkKind);
-					}
-#endif					
-				} 
-			}
-		}
-	}
-}
 /* 
  * ===  FUNCTION  =============================================================
  *         Name:  runOnModuleSensitive
@@ -623,8 +525,12 @@ InfoAppPass::runTest(Module &M)
 void
 InfoAppPass::runOnModuleSensitive(Module &M)
 {
+	//populate Maps before doing anything else
+	populateMapsSensitive(M);
+	createArraysAndSensChecks(M);
+	insertIOCChecks(M);
+
 	Function *func;
-	BasicBlock *bb;
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
 		removeChecksForFunction(F, M);
@@ -637,6 +543,52 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
+
+					//remove all ioc_checks
+					xformMap[ci] = true;
+				}
+			}
+		}
+	}
+
+	removeBenignChecks(M);
+}
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  populateMapsSensitive
+ *    Arguments:  @M - The source code module
+ *  Description:  TODO
+ * ============================================================================
+ */
+void
+InfoAppPass::populateMapsSensitive(Module &M)
+{
+
+	Function *func;
+	BasicBlock *bb;
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					
+					std::string iocKind = "";
+
+					if (StringRef(func->getName()).startswith("__ioc")) {
+						//get unique id for this ioc
+						iocKind = getStringKind(F, ci);
+						//create empty vector for this sink
+						sensPoints[iocKind] = std::vector<std::string>();
+						dbg_msg("checking sens sinks for ", iocKind);
+					}
+
 					if (ioc_report_arithm(func->getName())) {
 						/*
 						 * Get the output of the llvm.{ssad, ssub, smul,
@@ -662,16 +614,16 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 							 pii != BP.end();
 							 pii++) {
 							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
-								cinst->dump();
-								
 								std::string cfname = 
 									cinst->getCalledFunction()->getName();
 
 								if (llvm_arithm(cfname)) {
 									/*
 									 * use this instruction as the taint source
+									 * search for sensitive sink starting from
+									 * cinst
 									 */
-									searchSensitiveArithm(F, M, cinst);
+									searchSensitiveArithm(F, M, iocKind, cinst);
 									break;
 								}
 							}
@@ -702,72 +654,64 @@ InfoAppPass::runOnModuleSensitive(Module &M)
 						 * missed something
 						 */
 					}
-#if 0
+				}
+			}
+		}
+	}
+}
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  createArraysAndSensChecks
+ *    Arguments:  @M - The source code module
+ *  Description:  Create global arrays and add checks for sens sinks
+ * ============================================================================
+ */
+void
+InfoAppPass::createArraysAndSensChecks(Module &M)
+{
+	Function *func;
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					
 					const CallTaintEntry *entry =
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
 					if (entry->Name) {
-						dbg_msg("sens: ", entry->Name);
-
-						//find malloc basic block
-						BasicBlock *bb = ii->getParent();
-						dbg_msg("bb :", bb->getName());
+						std::string sinkKind = getStringKind(F, ci);
 						
-						std::string sinkKind = bb->getName();
-						InfoflowSolution *soln = getBackwardsSolFromEntry(sinkKind,
-																 ci,
-																 entry);
+						//get all ioc checks that lead to this sink
+						uint64_t totalIOC = iocPoints[sinkKind].size();
 
-						std::set<const Value *> vMap;
-						soln->getValueMap(vMap);
+						//create the respective global array
+						GlobalVariable *glA = createGlobalArray(M,
+																totalIOC,
+																sinkKind);
 
-						if(isConstAssign(vMap))
-						{
-							/* we want to keep those: true removes a wrapper */
-							dbg_err("sens-const");
-							xformMap[ci] = true;
+						//insert the check before the operation
+						insertIntFlowFunction(M, "checkIOC", ci, ii, 
+											  glA, totalIOC);
 
-						} else {
-							iocPoints[sinkKind] = std::vector<iocPoint>();
-							
-							//check forward
-							trackSoln(M, soln, ci, sinkKind);
-							
-							//get all ioc checks that lead to this sink
-							//FIXME currently only 1
-							uint64_t totalIOC = iocPoints[sinkKind].size();
-							
-							//create the respective global array
-							GlobalVariable *glA = createGlobalArray(M,
-																	totalIOC,
-																	sinkKind);
-							
-							//insert the check before the operation
-							insertIntFlowFunction(M, "checkIOC", ci, ii, 
-												  glA, totalIOC);
-
-							//insert functions to ioc blocks
-							//addFunc(M, soln, ci, sinkKind);
-						}
-					} else if ((func->getName() == "div")   ||
-							   (func->getName() == "ldiv")  ||
-							   (func->getName() == "lldiv") ||
-							   (func->getName() == "iconv")) {
-						setWrapper(ci, M, func);
-					}
-#endif
+					} 
 				}
 			} /* for-loops close here*/
 		}
 	}
-	
-	removeBenignChecks(M);
 }
 
 /*
  * ===  FUNCTION  =============================================================
  *         Name:  searchSensitiveArithm
- *  Description:  Implements the sensitive pass starting from arithmetic
+ *  Description:  Searches for sensitive sink starting from arithmetic
  *  			  operations.
  *    Arguments:  @M - the source code module
  *    			  @ci - the llvm{sadd, ssub, smul, uadd, usub, umul} function
@@ -775,21 +719,23 @@ InfoAppPass::runOnModuleSensitive(Module &M)
  * ============================================================================
  */
 void
-InfoAppPass::searchSensitiveArithm(Function &F, Module &M, CallInst *ci)
+InfoAppPass::searchSensitiveArithm(Function &F,
+								   Module &M,
+								   std::string iocKind,
+								   CallInst *ci)
 {
 	std::string srcKind = getStringKind(F, ci);
-	dbg_msg("searching ", srcKind);
-	
+	dbg_msg("called from ", iocKind);
+	dbg_msg("searching sens sink affected by ", srcKind);
+
+	// we examine sensitive sinks from the above block
 	InfoflowSolution *fsoln = getForwardSol(srcKind, ci);
 
 	/*
-	 * iterate the instructions and check if there are tainted sensitive sinks
-	 * if true, backward slice and check for ci.
-	 * Finally, add functions to the appropriate places
+	 * iterate the instructions and check if there are tainted 
+	 * sensitive sinks if true, backward slice and check for ci.
 	 */
-	if (backSensitiveArithm(M, ci, fsoln)) {
-		/* TODO: add check functions */
-	}
+	backSensitiveArithm(M, ci, iocKind, fsoln);
 }
 /* -----  end of function searchSensitive  ----- */
 
@@ -806,9 +752,10 @@ InfoAppPass::searchSensitiveArithm(Function &F, Module &M, CallInst *ci)
  *    			  @fsoln - the forward slicing solution
  * ============================================================================
  */
-bool
+void
 InfoAppPass::backSensitiveArithm(Module &M,
 								 CallInst *srcCI,
+								 std::string iocKind, 
 								 InfoflowSolution *fsoln)
 {
 	Function *func;
@@ -840,8 +787,6 @@ InfoAppPass::backSensitiveArithm(Module &M,
 							infoflow->setUntainted(sinkKind,
 												   *(ci->getOperand(0)));
 							
-							dbg_err("here we should insert");
-							
 							std::set<std::string> kinds;
 							kinds.insert(sinkKind);
 							
@@ -856,9 +801,16 @@ InfoAppPass::backSensitiveArithm(Module &M,
 													 soln) ||
 								checkBackwardTainted(*(srcCI->getOperand(1)),
 													   soln)) {
-								dbg_err("great success 2");
+								
+								//add sens sink to this ioc
+								sensPoints[iocKind].push_back(sinkKind);
+
+								//and add ioc the sens sink list
+								iocPoints[sinkKind].push_back(iocKind);
 									/* this one needs to be handled */
 									/* TODO: How to handle these cases? */
+
+								dbg_msg("found sensitive: ", sinkKind);
 							}
 						}
 					}
@@ -866,9 +818,138 @@ InfoAppPass::backSensitiveArithm(Module &M,
 			}
 		}
 	}
-	return false;
 }
 /* -----  end of function backSensitiveArithm  ----- */
+
+/* 
+ * ===  FUNCTION  =============================================================
+ *         Name:  insertIOCChecks
+ *    Arguments:  @M - The source code module
+ *  Description:  TODO
+ * ============================================================================
+ */
+void
+InfoAppPass::insertIOCChecks(Module &M)
+{
+
+	uint64_t glA_pos = 0;
+	Function *func;
+	
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+					
+					std::string iocKind = "";
+
+					if (StringRef(func->getName()).startswith("__ioc")) {
+						//get unique id for this ioc
+						iocKind = getStringKind(F, ci);
+						for (sensPointsForIOC::const_iterator sens_p =
+							 sensPoints.begin();
+							 sens_p != sensPoints.end();
+							 ++sens_p) {
+
+							sensPointVector spv = sens_p->second;
+							for(sensPointVector::const_iterator svi =
+								spv.begin();
+								svi != spv.end();
+								++svi) {
+								
+								std::string sink = *svi;
+								//get position
+								//FIXME
+								glA_pos = 0;
+								//glA_pos = iocPoints[sink].find(iocKind);
+								
+								//create the respective global array
+								GlobalVariable *glA = getGlobalArray(M, sink);
+
+								//insert the check before the operation
+								insertIntFlowFunction(M, "setTrueIOC",
+													  ci, ii, glA, glA_pos); 
+							}
+						}
+					}
+#if 0
+					if (ioc_report_arithm(func->getName())) {
+						/*
+						 * Get the output of the llvm.{ssad, ssub, smul,
+						 * uadd, usub, umul}
+						 * function in the parent basic block
+						 * and use this as the taint source for forward
+						 * slicing.
+						 */
+						bb = ci->getParent()->getSinglePredecessor();
+						if (bb == NULL) {
+							/* 
+							 * problem...
+							 * we should probably use a bb iterator and
+							 * use that in order to get the predecessor
+							 */
+							dbg_err("Could not get predecessor (arithm)");
+							continue;
+						}
+						
+						/* Get parent basic block instructions */
+						BasicBlock& BP = *bb;
+						for (BasicBlock::iterator pii = BP.begin();
+							 pii != BP.end();
+							 pii++) {
+							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
+								std::string cfname = 
+									cinst->getCalledFunction()->getName();
+
+								if (llvm_arithm(cfname)) {
+									/*
+									 * use this instruction as the taint source
+									 * search for sensitive sink starting from
+									 * cinst
+									 */
+									searchSensitiveArithm(F, M, iocKind, cinst);
+									break;
+								}
+							}
+						}	
+					
+					} else if (ioc_report_shl(func->getName())) {
+						/*
+						 * get the first instruction in the next basic
+						 * block and use this as the taint source. This
+						 * should be used with __ioc_report_shl_strict and
+						 * __ioc_report_shr_bitwidth. For shl_bitwidth
+						 * go 2 basic blocks "higher" (parent of parent)
+						 * than __ioc_report_shl_strict
+						 * and check for __ioc_report_shl_bitwidth.
+						 */
+					} else if (func->getName() == "__ioc_report_conversion") {
+						/*
+						 * do what???
+						 */
+					} else if (func->getName() == "__ioc_report_div_error") {
+						/*
+						 * go to the next basic block and use the first
+						 * instruction as the taint source.
+						 */
+					} else {
+						/*
+						 * do nothing. Left as a placeholder in case I
+						 * missed something
+						 */
+					}
+#endif
+				}
+			}
+		}
+	}
+}
 
 /* 
  * ===  FUNCTION  =============================================================
@@ -1327,13 +1408,13 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	return false;
 	if (StringRef(fname).startswith("__ioc") && mode == SENSITIVE) {
 		
+#if 0
 		//FIXME unique id for ioc src argument. This could be the BB?
 		std::string srcKind = getKindId("sens-ioc",
 										&unique_id);
 
 		
 		BasicBlock *ioc_bb = ci->getParent();
-		iocPoint p;
 		
 		if (iocPoints[kind].empty()) {
 			/* If not here, create and set to false */
@@ -1341,7 +1422,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 			iocPoints[kind].push_back(p);
 		} 
 
-#if 0
 		else {
 			/* Else find re-set to false */
 			for (iocPointsForSens::const_iterator ioc_p = iocPoints.begin();
@@ -1359,7 +1439,6 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 				}
 			}
 		}
-#endif
 		if(fname == "__ioc_report_conversion") {
 			InfoflowSolution* fsoln = getForwSolConv(srcKind, ci);
 
@@ -1387,6 +1466,7 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		} else {
 			assert(false && "not sensitive function");
 		}
+#endif
 	}
 	
 	return ret;

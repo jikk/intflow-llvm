@@ -56,8 +56,11 @@ class InfoAppPass : public ModulePass {
     void runOnModuleWhitelisting(Module &M);
     void runOnModuleBlacklisting(Module &M);
     void runOnModuleSensitive(Module &M);
-    void runTest(Module &M);
+	void populateMapsSensitive(Module &M);
+    void createArraysAndSensChecks(Module &M);
+    void insertIOCChecks(Module &M);
 
+	//FIXME remove this
 	AllocaInst *insertStoreInt32Inst(LLVMContext &Context, 
 									 std::string name,
 									 int value,
@@ -92,11 +95,15 @@ class InfoAppPass : public ModulePass {
 					   InfoflowSolution* soln,
 					   std::string& s);
 
-	bool backSensitiveArithm(Module &M,
+	void backSensitiveArithm(Module &M,
 							 CallInst *ci,
+							 std::string std,
 							 InfoflowSolution* soln);
 
-	void searchSensitiveArithm(Function &F, Module &M, CallInst *ci);
+	void searchSensitiveArithm(Function &F,
+							   Module &M,
+							   std::string iocKind,
+							   CallInst *ci);
 	void addFunc(Module &M,
 				   InfoflowSolution* soln,
 				   CallInst* sinkCI,
@@ -175,11 +182,16 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
-typedef std::map <std::string, bool> iocPoint;
-typedef std::vector <iocPoint> iocPointVector;
+/* All IOC checks related with a sens Sink */
+typedef std::vector <std::string> iocPointVector; //vector of ioc_checks
 typedef std::map <std::string, iocPointVector> iocPointsForSens;
 
+/* All sens sinks related with an IOC check */
+typedef std::vector <std::string> sensPointVector; //vector of sens_sinks
+typedef std::map <std::string, sensPointVector> sensPointsForIOC;
+
 iocPointsForSens iocPoints;
+sensPointsForIOC sensPoints;
 
 void dbg_err(std::string s);
 void dbg_msg(std::string s, std::string b);
