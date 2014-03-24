@@ -69,7 +69,7 @@ class InfoAppPass : public ModulePass {
 
 	void insertIntFlowFunction(Module &M,
 							   std::string name,
-							   CallInst *ci,
+							   Instruction *ci,
 							   BasicBlock::iterator ii,
 							   GlobalVariable *g,
 							   uint64_t totalIOC);

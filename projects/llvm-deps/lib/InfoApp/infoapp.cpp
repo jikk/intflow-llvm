@@ -463,7 +463,7 @@ InfoAppPass::getGlobalArray(Module &M, std::string sinkKind)
 void
 InfoAppPass::insertIntFlowFunction(Module &M,
 								   std::string name, 
-								   CallInst *ci,
+								   Instruction *ci,
 								   BasicBlock::iterator ii,
 								   GlobalVariable *tmpgl,
 								   uint64_t idx)
@@ -734,8 +734,12 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 																sinkKind);
 
 						//insert the check before the operation
-						insertIntFlowFunction(M, "checkIOC", ci, ii, 
-											  glA, totalIOC);
+						insertIntFlowFunction(M,
+											  "checkIOC",
+											  dyn_cast<Instruction>(ii),
+											  ii, 
+											  glA,
+											  totalIOC);
 
 					} 
 				}
@@ -1054,7 +1058,7 @@ InfoAppPass::insertIOCChecks(Module &M)
 	GlobalVariable *glA = NULL;
 	Function *func;
 	BasicBlock *bb;
-	
+
 	uint64_t glA_pos = 0;
 
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
@@ -1068,20 +1072,21 @@ InfoAppPass::insertIOCChecks(Module &M)
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
-					
+
+					std::string fname = func->getName();
 					std::string iocKind = "";
 
-					if (StringRef(func->getName()).startswith("__ioc")) {
+					if (StringRef(fname).startswith("__ioc")) {
 
 						//get unique id for this ioc
 						iocKind = getKindCall(F, ci);
-						
+
 						//see how many sensitive sinks we have for iocKind
 						if (sensPoints[iocKind].empty())
 							continue;
 
 						sensPointVector spv = sensPoints[iocKind];
-						
+
 						// Insert one check for each malloc
 						for(sensPointVector::const_iterator svi =
 							spv.begin();
@@ -1089,26 +1094,33 @@ InfoAppPass::insertIOCChecks(Module &M)
 							++svi) {
 
 							std::string sink = *svi;
-							
+
 							//get position of this IOC in the sens sink array
 							iocPointVector ipv = iocPoints[sink];
 							glA_pos = find(ipv.begin(), ipv.end(), iocKind) - 
 								ipv.begin();
-							
+
 							//create the respective global array
 							glA = getGlobalArray(M, sink);
 
 							//insert the check before the operation
-							insertIntFlowFunction(M, "setTrueIOC",
-												  ci, ii, glA, glA_pos); 
+							insertIntFlowFunction(M,
+												  "setTrueIOC",
+												  dyn_cast<Instruction>(ii),
+												  ii,
+												  glA,
+												  glA_pos); 
 
 							//Now we definitely have a sens sink related 
-							//with this IOC, on to add the setFalseIOC, 
-							if (ioc_report_arithm(func->getName())) {
+							//with this IOC, on to add the setFalseIOC,
+							if (ioc_report_arithm(fname) 				||
+								ioc_report_shl(fname)  					||
+								(fname == "__ioc_report_conversion")  	||
+								(fname == "__ioc_report_div_error")) {
 
 								bb = ci->getParent()->getSinglePredecessor();
 								if (bb == NULL) {
-									dbg_err("Could not get pred. (arithm2)");
+									dbg_err("Could not get predecessor");
 									continue;
 								}
 
@@ -1118,31 +1130,18 @@ InfoAppPass::insertIOCChecks(Module &M)
 								for (BasicBlock::iterator pii = BP.begin();
 									 pii != BP.end();
 									 pii++) {
+									
+									Instruction *pinst = 
+										dyn_cast<Instruction>(pii);
 
-									//FIXME do we need CallInst here?
-									if (CallInst *cinst = 
-										dyn_cast<CallInst>(pii)) {
-
-										insertIntFlowFunction(M,
-															  "setFalseIOC",
-															  cinst,
-															  pii,
-															  glA,
-															  glA_pos);
-										break;
-									}
+									insertIntFlowFunction(M,
+														  "setFalseIOC",
+														  pinst,
+														  pii,
+														  glA,
+														  glA_pos);
+									break;
 								}
-
-								continue;
-
-							} else if (ioc_report_shl(func->getName())) {
-								continue;
-							} else if (func->getName() == "__ioc_report_conversion") {
-								continue;
-							} else if (func->getName() == "__ioc_report_div_error") {
-								continue;
-							} else {
-								continue;
 							}
 						}
 					}
