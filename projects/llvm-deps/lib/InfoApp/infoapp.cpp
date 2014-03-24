@@ -751,7 +751,6 @@ InfoAppPass::populateMapsSensitive(Module &M)
 
 							//restore BB
 							bi--;
-
 							continue;
 						}
 					} else if (func->getName() == "__ioc_report_conversion") {
@@ -763,6 +762,10 @@ InfoAppPass::populateMapsSensitive(Module &M)
 						 * go to the next basic block and use the first
 						 * instruction as the taint source.
 						 */
+						bi++;
+						searchSensFromInst(F, M, iocKind, bi->front());
+						bi--;
+						continue;
 					} else {
 						/*
 						 * do nothing. Left as a placeholder in case I
@@ -914,7 +917,7 @@ InfoAppPass::backSensitiveInst(Function &F,
 								infoflow->greatestSolution(kinds, false);
 							
 							if (checkBackwardTainted(srcCI, soln)) {
-
+								//TODO add a check here to skip the for loop
 								handleStrictShift(iocKind, sinkKind, F);
 								
 								//add sens sink to this ioc
@@ -957,7 +960,6 @@ InfoAppPass::handleStrictShift(std::string iocKind,
 	Function *pfunc;
 	bool found_shl = false;
 
-	dbg_err("checking for shl_bitwidth");
 	for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
 		BasicBlock& B = *bi;
 		for (BasicBlock::iterator ii = B.begin(); ii != B.end(); ii++) {
