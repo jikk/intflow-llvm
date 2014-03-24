@@ -60,13 +60,6 @@ class InfoAppPass : public ModulePass {
     void createArraysAndSensChecks(Module &M);
     void insertIOCChecks(Module &M);
 
-	//FIXME remove this
-	AllocaInst *insertStoreInt32Inst(LLVMContext &Context, 
-									 std::string name,
-									 int value,
-									 inst_iterator &I);
-
-
 	void insertIntFlowFunction(Module &M,
 							   std::string name,
 							   Instruction *ci,
