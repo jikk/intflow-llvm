@@ -100,11 +100,26 @@ class InfoAppPass : public ModulePass {
 							 std::string std,
 							 InfoflowSolution* soln);
 
-	void searchSensitiveArithm(Function &F,
+	void backSensitiveInst(Function &F,
+						   Module &M,
+						   Instruction &i,
+						   std::string std,
+						   InfoflowSolution* soln);
+
+	void searchSensFromArithm(Function &F,
 							   Module &M,
 							   std::string iocKind,
 							   CallInst *ci);
 	
+	void searchSensFromInst(Function &F,
+							Module &M,
+							std::string iocKind,
+							Instruction &i);
+
+	void handleStrictShift(std::string iocKind,
+						   std::string sinkKind,
+						   Function &F);
+
 	void backwardSlicingBlacklisting(Module &M,
 									 InfoflowSolution* fsoln,
 									 CallInst* srcCI);
@@ -161,7 +176,8 @@ class InfoAppPass : public ModulePass {
 	uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
 	std::string getKindId(std::string name, uint64_t *id);
-	std::string getStringKind(Function &F, CallInst *ci);
+	std::string getKindCall(Function &F, CallInst *ci);
+	std::string getKindInst(Function &F, Instruction &i);
 
 };  //class
   

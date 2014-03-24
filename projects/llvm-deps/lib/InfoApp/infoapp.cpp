@@ -582,8 +582,9 @@ InfoAppPass::populateMapsSensitive(Module &M)
 					std::string iocKind = "";
 
 					if (StringRef(func->getName()).startswith("__ioc")) {
+						dbg_err("------------------------------------");
 						//get unique id for this ioc
-						iocKind = getStringKind(F, ci);
+						iocKind = getKindCall(F, ci);
 						//create empty vector for this sink
 						sensPoints[iocKind] = std::vector<std::string>();
 						dbg_msg("checking sens sinks for ", iocKind);
@@ -623,7 +624,7 @@ InfoAppPass::populateMapsSensitive(Module &M)
 									 * search for sensitive sink starting from
 									 * cinst
 									 */
-									searchSensitiveArithm(F, M, iocKind, cinst);
+									searchSensFromArithm(F, M, iocKind, cinst);
 									break;
 								}
 							}
@@ -640,22 +641,39 @@ InfoAppPass::populateMapsSensitive(Module &M)
 						 * and check for __ioc_report_shl_bitwidth.
 						 */
 						
+
+						//for the moment, lets always check the next basic
+						//block. if strict get first command if bitwidth get
+						//second
 						//get next BB
 						bi++;
-						dbg_err("found shift instruction");
-						BasicBlock& BP = *bi;
-						for (BasicBlock::iterator pii = BP.begin();
-							 pii != BP.end();
-							 pii++) {
-							
-							pii->dump();
+						dbg_msg("found shift ", func->getName());
+		
+						if (func->getName() == "__ioc_report_shl_strict") {
+							//pass first instruction of the next bb
+							searchSensFromInst(F, M, iocKind, bi->front());
 						}
+						
+						//get second command if bitwidth:
+						if (func->getName() == "__ioc_report_shr_bitwidth") {
+							dbg_err("bitwidth");
+							/* Get next basic block's instructions */
+							BasicBlock& SB = *bi;
+							for (BasicBlock::iterator sii = SB.begin();
+								 sii != SB.end();
+								 sii++) {
 
-						//restore BB
-						bi--;
+								//search from second command of next BB
+								sii++;
+								searchSensFromInst(F, M, iocKind, *sii);
+								break;
+							}
 
-						continue;
+							//restore BB
+							bi--;
 
+							continue;
+						}
 					} else if (func->getName() == "__ioc_report_conversion") {
 						/*
 						 * do what???
@@ -704,7 +722,7 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
 					if (entry->Name) {
-						std::string sinkKind = getStringKind(F, ci);
+						std::string sinkKind = getKindCall(F, ci);
 						
 						dbg_msg("creating global array for ", sinkKind);
 						//get all ioc checks that lead to this sink
@@ -728,7 +746,188 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 
 /*
  * ===  FUNCTION  =============================================================
- *         Name:  searchSensitiveArithm
+ *         Name:  searchSensFromInst
+ *  Description:  Searches for sensitive sink starting from first instr
+ *  			  of next BB
+ *    Arguments:  @M - the source code module
+ *    			  @ci - the llvm{sadd, ssub, smul, uadd, usub, umul} function
+ *    			  call
+ * ============================================================================
+ */
+void
+InfoAppPass::searchSensFromInst(Function &F,
+								   Module &M,
+								   std::string iocKind,
+								   Instruction &i)
+{
+	std::string srcKind = getKindInst(F, i);
+	dbg_msg("called from ", iocKind);
+	dbg_msg("searching sens sink affected by ", srcKind);
+
+	// we examine sensitive sinks from the above block: get Forward Solution
+	// The instruction IS the result so taint this
+	infoflow->setTainted(srcKind, i);
+	std::set<std::string> kinds;
+	kinds.insert(srcKind);
+	InfoflowSolution *fsoln = infoflow->leastSolution(kinds, false, true);
+	
+	backSensitiveInst(F, M, i, iocKind, fsoln);
+}
+/* -----  end of function searchSensitiveFromStrictSh  ----- */
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  backSensitiveInst
+ *  Description:  Iterates over the instructions looking for sensitive
+ *  			  functions that are forward tainted. It uses backward slicing
+ *  			  to determine if forward slicing is accurate. Then it handles
+ *  			  those that are actually correct
+ *    Arguments:  @M - the source code module
+ *    			  @srcCI - the arithmetic operation used for forward tainting
+ *    			  @fsoln - the forward slicing solution
+ * ============================================================================
+ */
+void
+InfoAppPass::backSensitiveInst(Function &F,
+							   Module &M,
+							   Instruction &srcCI,
+							   std::string iocKind, 
+							   InfoflowSolution *fsoln)
+{
+	Function *func;
+
+	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
+		Function& F = *mi;
+		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+			BasicBlock& B = *bi;
+			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
+				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+					func = ci->getCalledFunction();
+					if (!func)
+						continue;
+
+					const CallTaintEntry *entry =
+						findEntryForFunction(sensSinkSummaries,
+											 func->getName());
+					if (entry->Name) {
+						/* this is a sensitive function */
+						
+						/* TODO: need a way to handle different functions too
+						 * (apart from malloc)
+						 * FIXME: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
+						 */
+
+						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
+							/* backward slicing needed */
+							std::string sinkKind = getKindCall(F, ci);
+							infoflow->setUntainted(sinkKind,
+												   *(ci->getOperand(0)));
+							
+							std::set<std::string> kinds;
+							kinds.insert(sinkKind);
+							
+							InfoflowSolution *soln =
+								infoflow->greatestSolution(kinds, false);
+							
+							if (checkBackwardTainted(srcCI, soln)) {
+
+								handleStrictShift(iocKind, sinkKind, F);
+								
+								//add sens sink to this ioc
+								sensPoints[iocKind].push_back(sinkKind);
+								dbg_err("*************************");
+								dbg_msg("sink : ", sinkKind);
+								dbg_msg("adding ioc: ", iocKind);
+								//and add ioc the sens sink list
+								iocPoints[sinkKind].push_back(iocKind);
+									/* this one needs to be handled */
+									/* TODO: How to handle these cases? */
+
+								dbg_msg("found sensitive: ", sinkKind);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+/* -----  end of function backSensitiveInst  ----- */
+
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  handleStrictShift
+ *  Description:  Checks for shl bitwidth if we have shl_strict
+ *    Arguments:  @B - shl_strict Basic Block
+ *    			  TODO
+ * ============================================================================
+ */
+void
+InfoAppPass::handleStrictShift(std::string iocKind,
+							   std::string sinkKind,
+							   Function &F)
+{
+	std::string shlKind;
+	Function *func;
+	Function *pfunc;
+	bool found_shl = false;
+
+	dbg_err("checking for shl_bitwidth");
+	for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
+		BasicBlock& B = *bi;
+		for (BasicBlock::iterator ii = B.begin(); ii != B.end(); ii++) {
+			if (CallInst* ci = dyn_cast<CallInst>(ii)) {
+				func = ci->getCalledFunction();
+				if (!func)
+					continue;
+				if (func->getName() == "__ioc_report_shl_strict") {
+					//go two bb up
+					bi--;
+					bi--;
+
+					BasicBlock& PB = *bi;
+					for (BasicBlock::iterator pii = PB.begin();
+						 pii != PB.end();
+						 pii++) {
+
+						if (CallInst* pci = dyn_cast<CallInst>(pii)) {
+							pfunc = pci->getCalledFunction();
+							if (!pfunc)
+								continue;
+
+							std::string pfname = pfunc->getName();
+							if (pfname == "__ioc_report_shl_bitwidth") {
+								shlKind = getKindCall(F, pci);
+								found_shl = true;
+								break;
+							}
+						}
+					}
+				}
+			}
+			if (found_shl)
+				break;
+		}
+		if (found_shl)
+			break;
+	}
+	
+	if (found_shl) {
+		sensPoints[shlKind].push_back(sinkKind);
+		dbg_err("*************************");
+		dbg_msg("sink : ", sinkKind);
+		dbg_msg("adding ioc: ", shlKind);
+		//and add ioc the sens sink list
+		iocPoints[sinkKind].push_back(shlKind);
+		dbg_msg("found sensitive: ", sinkKind);
+	}
+
+}
+
+/*
+ * ===  FUNCTION  =============================================================
+ *         Name:  searchSensFromArithm
  *  Description:  Searches for sensitive sink starting from arithmetic
  *  			  operations.
  *    Arguments:  @M - the source code module
@@ -737,12 +936,12 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
  * ============================================================================
  */
 void
-InfoAppPass::searchSensitiveArithm(Function &F,
+InfoAppPass::searchSensFromArithm(Function &F,
 								   Module &M,
 								   std::string iocKind,
 								   CallInst *ci)
 {
-	std::string srcKind = getStringKind(F, ci);
+	std::string srcKind = getKindCall(F, ci);
 	dbg_msg("called from ", iocKind);
 	dbg_msg("searching sens sink affected by ", srcKind);
 
@@ -801,7 +1000,7 @@ InfoAppPass::backSensitiveArithm(Module &M,
 
 						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
 							/* backward slicing needed */
-							std::string sinkKind = getStringKind(F, ci);
+							std::string sinkKind = getKindCall(F, ci);
 							infoflow->setUntainted(sinkKind,
 												   *(ci->getOperand(0)));
 							
@@ -875,7 +1074,7 @@ InfoAppPass::insertIOCChecks(Module &M)
 					if (StringRef(func->getName()).startswith("__ioc")) {
 
 						//get unique id for this ioc
-						iocKind = getStringKind(F, ci);
+						iocKind = getKindCall(F, ci);
 						
 						//see how many sensitive sinks we have for iocKind
 						if (sensPoints[iocKind].empty())
@@ -1526,7 +1725,30 @@ InfoAppPass::getStringFromVal(Value* val, std::string& output)
  */
 
 std::string
-InfoAppPass::getStringKind(Function &F, CallInst *ci)
+InfoAppPass::getKindInst(Function &F, Instruction &ci)
+{
+	std::stringstream SS;
+	
+	//Get function name that contains the CallInst
+	std::string tmp = F.getName();
+	SS << tmp;
+	SS << ":";
+	
+	//get called function
+	tmp = ci.getOpcodeName();
+	SS << tmp;
+	SS << ":";
+
+	//get label inside bb
+	tmp = ci.getParent()->getName();
+	SS << tmp;
+	
+	std::string stringKind = SS.str();
+	return stringKind;
+}
+
+std::string
+InfoAppPass::getKindCall(Function &F, CallInst *ci)
 {
 	std::stringstream SS;
 	
