@@ -105,26 +105,6 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	//doFinalization();
 }
 
-#if 0
-void
-InfoAppPass::addFunctions(Module &M, GlobalVariable * glArray) {
-	dbg_err("adding functions");
-	DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
-	DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
-	uint64_t pos = 0;
-	for (;xi!=xe; xi++) {
-		if (xi->second) {
-			insertIntFlowFunction(M,
-								  "setTrueIOC",
-								  xi->first,
-								  dyn_cast<BasicBlock::iterator>(xi->first),
-								  glArray,
-								  pos++);
-		}
-	}
-}
-#endif
-
 void
 InfoAppPass::doFinalization() {
 	dbg_err("doFinalizationWhitelisting");
