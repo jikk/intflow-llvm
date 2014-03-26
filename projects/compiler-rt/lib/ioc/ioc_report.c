@@ -20,6 +20,7 @@
 
 #define __OUTPUT_XML__
 
+#if 0
 #ifdef __OUTPUT_XML__
 int outputXML(char* log,
               char* fname,
@@ -27,7 +28,7 @@ int outputXML(char* log,
               uint32_t col,
               char* valStr);
 #endif
-
+#endif
 // Shared helper for reporting failed checks
 void __ioc_report_error(uint32_t line, uint32_t column,
                         const char *filename, const char *exprstr,
@@ -130,6 +131,7 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
   else
     sprintf(srcstr, "%llu", (unsigned long long)src);
 
+#if 0
 #ifdef __OUTPUT_XML__
   char log[256];
   sprintf(log, "conversion error from %s (%s) to %s (%s)",
@@ -141,6 +143,7 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
                   " from '%s' (%s) to '%s' (%s)\n",
                   filename, line, column, srcstr,
                   srcty, canonsrcty, dstty, canondstty);
+#endif
 #endif
 }
 
@@ -167,16 +170,21 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   __ioc_print_val(lstr, lval, LT);
   __ioc_print_val(rstr, rval, RT);
 
+#if 0
 #ifdef __OUTPUT_XML__
   char log[256];
   sprintf(log,"[ expr = '%s', lval = %s, rval = %s ]", exprstr, lstr, rstr);
   outputXML((char*) msg, (char*) filename, line, column, log);
 #else
- 
+#endif
+
+#if 0
   fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
                   "[ expr = '%s', lval = %s, rval = %s ]\n",
                   filename, line, column, msg,
                   exprstr, lstr, rstr);
+#endif
+
 #endif
 }
 

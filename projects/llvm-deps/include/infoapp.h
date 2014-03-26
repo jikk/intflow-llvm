@@ -111,7 +111,8 @@ class InfoAppPass : public ModulePass {
 
 	void handleStrictShift(std::string iocKind,
 						   std::string sinkKind,
-						   Function &F);
+						   Function &F,
+						   Module &M);
 
 	void backwardSlicingBlacklisting(Module &M,
 									 InfoflowSolution* fsoln,
@@ -169,8 +170,8 @@ class InfoAppPass : public ModulePass {
 	uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
 	std::string getKindId(std::string name, uint64_t *id);
-	std::string getKindCall(Function &F, CallInst *ci);
-	std::string getKindInst(Function &F, Instruction &i);
+	std::string getKindCall(Module &M, Function &F, CallInst *ci);
+	std::string getKindInst(Module &M, Function &F, Instruction &i);
 
 };  //class
   

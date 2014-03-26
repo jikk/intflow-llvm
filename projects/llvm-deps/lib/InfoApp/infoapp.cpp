@@ -268,8 +268,6 @@ InfoAppPass::runOnModuleWhitelisting(Module &M)
 {
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		
-		dbg_msg("DBG0:fname:", F.getName());
 		removeChecksForFunction(F, M);
 
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -389,7 +387,6 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 
 	for (Module::iterator mi = M.begin(); mi != M.end(); mi++) {
 		Function& F = *mi;
-		dbg_msg("DBG0:fname:", F.getName());
 		//this is for whitelisting
 		removeChecksForFunction(F, M);
 		for (Function::iterator bi = F.begin(); bi != F.end(); bi++) {
@@ -446,6 +443,8 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 						continue;
 					
 					func = ci->getCalledFunction();
+					if (!func)
+						continue;
 					if (func->getName() == "__ioc_report_conversion") {
 						xformMap[ci] = false;
 						
@@ -577,7 +576,7 @@ InfoAppPass::getGlobalArray(Module &M, std::string sinkKind)
 	GlobalVariable *tmpgl = NULL;
 	
 	for (gvIt = M.global_begin(); gvIt != M.global_end(); gvIt++)
-		if ( gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind)
+		if (gvIt->getName().str() == "__gl_ioc_malloc_" + sinkKind)
 			tmpgl = gvIt;
 
 	return tmpgl;
@@ -664,7 +663,7 @@ InfoAppPass::populateMapsSensitive(Module &M)
 					if (StringRef(func->getName()).startswith("__ioc")) {
 						dbg_err("------------------------------------");
 						//get unique id for this ioc
-						iocKind = getKindCall(F, ci);
+						iocKind = getKindCall(M, F, ci);
 						//create empty vector for this sink
 						sensPoints[iocKind] = std::vector<std::string>();
 						dbg_msg("checking sens sinks for ", iocKind);
@@ -695,17 +694,20 @@ InfoAppPass::populateMapsSensitive(Module &M)
 							 pii != BP.end();
 							 pii++) {
 							if (CallInst *cinst = dyn_cast<CallInst>(pii)) {
-								std::string cfname = 
-									cinst->getCalledFunction()->getName();
+								if (cinst->getCalledFunction()) {
+									std::string cfname = 
+										cinst->getCalledFunction()->getName();
 
-								if (llvm_arithm(cfname)) {
-									/*
-									 * use this instruction as the taint source
-									 * search for sensitive sink starting from
-									 * cinst
-									 */
-									searchSensFromArithm(F, M, iocKind, cinst);
-									break;
+									if (llvm_arithm(cfname)) {
+										/*
+										 * use this instruction as the taint 
+										 * source search for sensitive sink 
+										 * starting from cinst
+										 */
+										searchSensFromArithm(F, M,
+															 iocKind, cinst);
+										break;
+									}
 								}
 							}
 						}	
@@ -805,7 +807,7 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 						findEntryForFunction(sensSinkSummaries,
 											 func->getName());
 					if (entry->Name) {
-						std::string sinkKind = getKindCall(F, ci);
+						std::string sinkKind = getKindCall(M, F, ci);
 						
 						dbg_msg("creating global array for ", sinkKind);
 						//get all ioc checks that lead to this sink
@@ -847,7 +849,7 @@ InfoAppPass::searchSensFromInst(Function &F,
 								   std::string iocKind,
 								   Instruction &i)
 {
-	std::string srcKind = getKindInst(F, i);
+	std::string srcKind = getKindInst(M, F, i);
 	dbg_msg("called from ", iocKind);
 	dbg_msg("searching sens sink affected by ", srcKind);
 
@@ -906,7 +908,7 @@ InfoAppPass::backSensitiveInst(Function &F,
 
 						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
 							/* backward slicing needed */
-							std::string sinkKind = getKindCall(F, ci);
+							std::string sinkKind = getKindCall(M, F, ci);
 							infoflow->setUntainted(sinkKind,
 												   *(ci->getOperand(0)));
 							
@@ -918,7 +920,7 @@ InfoAppPass::backSensitiveInst(Function &F,
 							
 							if (checkBackwardTainted(srcCI, soln)) {
 								//TODO add a check here to skip the for loop
-								handleStrictShift(iocKind, sinkKind, F);
+								handleStrictShift(iocKind, sinkKind, F, M);
 								
 								//add sens sink to this ioc
 								sensPoints[iocKind].push_back(sinkKind);
@@ -953,7 +955,8 @@ InfoAppPass::backSensitiveInst(Function &F,
 void
 InfoAppPass::handleStrictShift(std::string iocKind,
 							   std::string sinkKind,
-							   Function &F)
+							   Function &F,
+							   Module &M)
 {
 	std::string shlKind;
 	Function *func;
@@ -984,7 +987,7 @@ InfoAppPass::handleStrictShift(std::string iocKind,
 
 							std::string pfname = pfunc->getName();
 							if (pfname == "__ioc_report_shl_bitwidth") {
-								shlKind = getKindCall(F, pci);
+								shlKind = getKindCall(M, F, pci);
 								found_shl = true;
 								break;
 							}
@@ -1027,7 +1030,7 @@ InfoAppPass::searchSensFromArithm(Function &F,
 								   std::string iocKind,
 								   CallInst *ci)
 {
-	std::string srcKind = getKindCall(F, ci);
+	std::string srcKind = getKindCall(M, F, ci);
 	dbg_msg("called from ", iocKind);
 	dbg_msg("searching sens sink affected by ", srcKind);
 
@@ -1086,7 +1089,7 @@ InfoAppPass::backSensitiveArithm(Module &M,
 
 						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
 							/* backward slicing needed */
-							std::string sinkKind = getKindCall(F, ci);
+							std::string sinkKind = getKindCall(M, F, ci);
 							infoflow->setUntainted(sinkKind,
 												   *(ci->getOperand(0)));
 							
@@ -1161,7 +1164,7 @@ InfoAppPass::insertIOCChecks(Module &M)
 					if (StringRef(fname).startswith("__ioc")) {
 
 						//get unique id for this ioc
-						iocKind = getKindCall(F, ci);
+						iocKind = getKindCall(M, F, ci);
 
 						//see how many sensitive sinks we have for iocKind
 						if (sensPoints[iocKind].empty())
@@ -1208,6 +1211,8 @@ InfoAppPass::insertIOCChecks(Module &M)
 
 								/* Get parent basic block instructions */
 								BasicBlock& BP = *bb;
+								if (!bb)
+									continue;
 								dbg_msg("setting False in ", bb->getName());
 								for (BasicBlock::iterator pii = BP.begin();
 									 pii != BP.end();
@@ -1258,6 +1263,8 @@ InfoAppPass::removeBenignChecks(Module &M)
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
 					Function *func = ci->getCalledFunction();
+					if (!func)
+						continue;
 					if (ioc_report_all(func->getName()) && !xformMap[ci] ){
 						setWrapper(ci, M, func);
 					}
@@ -1495,6 +1502,8 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 	bool ret = false;
 	
 	Function* func = ci->getCalledFunction();
+	if (!func)
+		return false;
 	std::string fname = func->getName();
 
 	//check for white-listing
@@ -1507,6 +1516,8 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		InfoflowSolution* fsoln = getForwardSolFromEntry(srcKind, ci, entry);
 		
 		Function* sinkFunc = sinkCI->getCalledFunction();
+		if(!sinkFunc)
+			return false;
 		if(sinkFunc->getName() == "__ioc_report_conversion")
 		{
 			if (checkForwardTainted(*(sinkCI->getOperand(7)), fsoln)) {
@@ -1541,6 +1552,8 @@ InfoAppPass::trackSolnInst(CallInst *ci,
 		InfoflowSolution* fsoln = getForwardSolFromEntry(srcKind, ci, entry);
 		
 		Function* sinkFunc = sinkCI->getCalledFunction();
+		if(!sinkFunc)
+			return false;
 		if(sinkFunc->getName() == "__ioc_report_conversion") {
 			if (checkForwardTainted(*(sinkCI->getOperand(7)), fsoln)) {
 				dbg_err("checkForwardTainted:black0:true");
@@ -1687,12 +1700,16 @@ InfoAppPass::getStringFromVal(Value* val, std::string& output)
  */
 
 std::string
-InfoAppPass::getKindInst(Function &F, Instruction &ci)
+InfoAppPass::getKindInst(Module &M, Function &F, Instruction &ci)
 {
 	std::stringstream SS;
 	
 	//Get function name that contains the CallInst
-	std::string tmp = F.getName();
+	std::string tmp = M.getModuleIdentifier();
+	SS << tmp;
+	SS << ":";
+	
+	tmp = F.getName();
 	SS << tmp;
 	SS << ":";
 	
@@ -1702,7 +1719,8 @@ InfoAppPass::getKindInst(Function &F, Instruction &ci)
 	SS << ":";
 
 	//get label inside bb
-	tmp = ci.getParent()->getName();
+	if (ci.getParent())
+		tmp = ci.getParent()->getName();
 	SS << tmp;
 	
 	std::string stringKind = SS.str();
@@ -1710,23 +1728,30 @@ InfoAppPass::getKindInst(Function &F, Instruction &ci)
 }
 
 std::string
-InfoAppPass::getKindCall(Function &F, CallInst *ci)
+InfoAppPass::getKindCall(Module &M, Function &F, CallInst *ci)
 {
 	std::stringstream SS;
-	
 	//Get function name that contains the CallInst
-	std::string tmp = F.getName();
+	std::string tmp = M.getModuleIdentifier();
+	SS << tmp;
+	SS << ":";
+	
+	tmp = F.getName();
 	SS << tmp;
 	SS << ":";
 	
 	//get called function
 	Function *func = ci->getCalledFunction();
-	tmp = func->getName();
+	if (func)
+		tmp = func->getName();
+	else
+		tmp = "main";
 	SS << tmp;
 	SS << ":";
 
 	//get label inside bb
-	tmp = ci->getParent()->getName();
+	if (ci->getParent())
+		tmp = ci->getParent()->getName();
 	SS << tmp;
 	
 	std::string stringKind = SS.str();
@@ -1936,6 +1961,8 @@ InfoAppPass::format_ioc_report_func(const Value* val, raw_string_ostream& rs)
 		return;
 
 	const Function* func = ci->getCalledFunction();
+	if (!func)
+		return;
 	assert(func && "Function casting check");
 
 	//line & column

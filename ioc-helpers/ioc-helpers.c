@@ -33,8 +33,8 @@ int checkIOC(int *array, int size)
 		terminate |= array[i];
 
 	printf("size is %d,  result is %d\n", size, terminate);
-	if (terminate)
-		exit(1);
+//	if (terminate)
+//		exit(1);
 }
 
 char* parseFName(char* fname) {
