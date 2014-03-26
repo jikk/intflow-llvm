@@ -52,7 +52,10 @@ static const struct CallTaintEntry sensSinkSummaries[] = {
 	// function  tainted values   tainted direct memory tainted root ptrs
 	{ "malloc",   	TAINTS_ARG_1,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
 	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "realloc", TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "realloc", 	TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "mmap", 		TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "memcpy", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "memset", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
 	{ 0,          TAINTS_NOTHING,	TAINTS_NOTHING,		TAINTS_NOTHING }
 };
 
@@ -97,7 +100,7 @@ InfoAppPass::doInitializationAndRun(Module &M)
 	else
 		exit(mode);
 	
-	//doFinalization();
+	doFinalization();
 }
 
 void
@@ -625,8 +628,8 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	/* Push number of elements */
 	fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, idx)));       
 
-	if (!fc->getType()->isFunctionTy())
-		return;
+//	if (!fc->getType()->isFunctionTy())
+//		return;
 
 	f = cast<Function>(fc);
 	ArrayRef<Value *> functionArguments(fargs);
@@ -1708,11 +1711,12 @@ InfoAppPass::getKindInst(Module &M, Function &F, Instruction &ci)
 {
 	std::stringstream SS;
 	
-	//Get function name that contains the CallInst
+	//Get Module ID
 	std::string tmp = M.getModuleIdentifier();
 	SS << tmp;
 	SS << ":";
 	
+	//Get function name that contains the CallInst
 	tmp = F.getName();
 	SS << tmp;
 	SS << ":";
@@ -1735,11 +1739,12 @@ std::string
 InfoAppPass::getKindCall(Module &M, Function &F, CallInst *ci)
 {
 	std::stringstream SS;
-	//Get function name that contains the CallInst
+	//Get Module ID
 	std::string tmp = M.getModuleIdentifier();
 	SS << tmp;
 	SS << ":";
 	
+	//Get function name that contains the CallInst
 	tmp = F.getName();
 	SS << tmp;
 	SS << ":";
@@ -1899,20 +1904,9 @@ getWhiteList() {
 		pos = line.find(",", pos) + 1;
 		shift = line.substr(pos, line.size() - pos);
 
-		if (conv.compare("true") == 0)
-			conv_bool = true;
-		else
-			conv_bool = false;
-
-		if (overflow.compare("true") == 0)
-			overflow_bool = true;
-		else
-			overflow_bool = false;
-
-		if (shift.compare("true") == 0)
-			shift_bool = true;
-		else
-			shift_bool = false;
+		conv_bool     = (conv.compare("true") == 0);
+		overflow_bool = (overflow.compare("true") == 0);
+		shift_bool    = (shift.compare("true") == 0);
 
 		if (function.compare("0") == 0)
 			rmCheckList[i].func = (char*) 0;
