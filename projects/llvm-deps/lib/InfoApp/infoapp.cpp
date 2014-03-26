@@ -625,12 +625,16 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	/* Push number of elements */
 	fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, idx)));       
 
+	if (!fc->getType()->isFunctionTy())
+		return;
+
 	f = cast<Function>(fc);
 	ArrayRef<Value *> functionArguments(fargs);
 	iocCheck = CallInst::Create(f, functionArguments, "");
 	
 	/* Insert Function */
-	ci->getParent()->getInstList().insert(ci, iocCheck);
+	if (ci->getParent())
+		ci->getParent()->getInstList().insert(ci, iocCheck);
 }
 
 /* 
@@ -1218,8 +1222,8 @@ InfoAppPass::insertIOCChecks(Module &M)
 									 pii != BP.end();
 									 pii++) {
 									
-									Instruction *pinst = 
-										dyn_cast<Instruction>(pii);
+									Instruction *pinst = pii;
+										//dyn_cast<Instruction>(pii);
 
 									insertIntFlowFunction(M,
 														  "setFalseIOC",
