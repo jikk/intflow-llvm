@@ -5,6 +5,7 @@
 
 #include "llvm/Instruction.h"
 #include "llvm/Instructions.h"
+#include <llvm/InstrTypes.h>
 #include "llvm/Function.h"
 #include "llvm/Module.h"
 #include "llvm/Support/Debug.h"
@@ -51,11 +52,11 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 static const struct CallTaintEntry sensSinkSummaries[] = {
 	// function  tainted values   tainted direct memory tainted root ptrs
 	{ "malloc",   	TAINTS_ARG_1,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "realloc", 	TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "mmap", 		TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "memcpy", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-	{ "memset", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+//	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
+//	{ "realloc", 	TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+//	{ "mmap", 		TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+//	{ "memcpy", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+//	{ "memset", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
 	{ 0,          TAINTS_NOTHING,	TAINTS_NOTHING,		TAINTS_NOTHING }
 };
 
@@ -593,7 +594,6 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 								   GlobalVariable *tmpgl,
 								   uint64_t idx)
 {
-	Function *f;
 	Instruction *iocCheck;
 
 	/* Get address of global array */
@@ -606,8 +606,8 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	
 	/* ptr_arrayidx_m is the array addr for tmpgl */
 	GetElementPtrInst* ptr_arrayidx_m = 
-		GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "test", ii);
-	
+		GetElementPtrInst::Create(tmpgl, ptr_arrayidx_indices, "get_ptr", ii);
+
 	PointerType* arrayPtr = 
 		PointerType::get(IntegerType::get(M.getContext(), 32), 0);
 	
@@ -615,7 +615,7 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	
 	/* Construct Function */
 	Constant *fc = M.getOrInsertFunction(name, 
-							/* type */   Type::getInt32Ty(M.getContext()), 
+							/* type */   Type::getInt32Ty(M.getContext()),
 							/* arg1 */ 	 arrayPtr,
 							/* arg2 */	 Type::getInt32Ty(M.getContext()),
 						 /* Linkage */   GlobalValue::ExternalLinkage,
@@ -627,17 +627,14 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	fargs.push_back(ptr_arrayidx_m);
 	/* Push number of elements */
 	fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, idx)));       
-
-//	if (!fc->getType()->isFunctionTy())
-//		return;
-
-	f = cast<Function>(fc);
-	ArrayRef<Value *> functionArguments(fargs);
-	iocCheck = CallInst::Create(f, functionArguments, "");
-	
-	/* Insert Function */
-	if (ci->getParent())
-		ci->getParent()->getInstList().insert(ci, iocCheck);
+	if (isa<Function>(fc)) {
+		//Function *f = dyn_cast<Function>(fc);
+		ArrayRef<Value *> functionArguments(fargs);
+		iocCheck = CallInst::Create(fc, functionArguments, "");
+		/* Insert Function */
+		if (ci->getParent())
+			ci->getParent()->getInstList().insert(ci, iocCheck);
+	} 
 }
 
 /* 
@@ -820,19 +817,23 @@ InfoAppPass::createArraysAndSensChecks(Module &M)
 						//get all ioc checks that lead to this sink
 						uint64_t totalIOC = iocPoints[sinkKind].size();
 
-						//create the respective global array
-						GlobalVariable *glA = createGlobalArray(M,
-																totalIOC,
-																sinkKind);
+						//If we have IOC checks leading to this sens sink
+						if (totalIOC > 0) {
+							//create the respective global array
+							GlobalVariable *glA = createGlobalArray(M,
+																	totalIOC,
+																	sinkKind);
 
-						//insert the check before the operation
-						insertIntFlowFunction(M,
-											  "checkIOC",
-											  dyn_cast<Instruction>(ii),
-											  ii, 
-											  glA,
-											  totalIOC);
-
+							Instruction *sti = bi->getFirstNonPHI();
+							assert(sti && "could not get instruction checkIOC");
+							
+							insertIntFlowFunction(M,
+												  "checkIOC",
+												  sti,
+												  ii, 
+												  glA,
+												  totalIOC);
+						}
 					} 
 				}
 			} /* for-loops close here*/
@@ -1195,14 +1196,16 @@ InfoAppPass::insertIOCChecks(Module &M)
 							//create the respective global array
 							glA = getGlobalArray(M, sink);
 
-							//insert the check before the operation
+							Instruction *sti = bi->getFirstNonPHI();
+							assert(sti && "could not get instruction setTrue");
+							
 							insertIntFlowFunction(M,
 												  "setTrueIOC",
-												  dyn_cast<Instruction>(ii),
+												  sti,
 												  ii,
 												  glA,
 												  glA_pos); 
-
+							
 							//Now we definitely have a sens sink related 
 							//with this IOC, on to add the setFalseIOC,
 							if (ioc_report_arithm(fname) 				||
@@ -1218,24 +1221,18 @@ InfoAppPass::insertIOCChecks(Module &M)
 
 								/* Get parent basic block instructions */
 								BasicBlock& BP = *bb;
-								if (!bb)
-									continue;
+								
 								dbg_msg("setting False in ", bb->getName());
-								for (BasicBlock::iterator pii = BP.begin();
-									 pii != BP.end();
-									 pii++) {
-									
-									Instruction *pinst = pii;
-										//dyn_cast<Instruction>(pii);
+								BasicBlock::iterator pii = BP.begin();
+								Instruction *pinst = BP.getFirstNonPHI();
+								assert(pinst && "could not get inst. setFalse");
+								insertIntFlowFunction(M,
+													  "setFalseIOC",
+													  pinst,
+													  pii,
+													  glA,
+													  glA_pos);
 
-									insertIntFlowFunction(M,
-														  "setFalseIOC",
-														  pinst,
-														  pii,
-														  glA,
-														  glA_pos);
-									break;
-								}
 							}
 						}
 					}
