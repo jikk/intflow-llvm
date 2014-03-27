@@ -627,14 +627,12 @@ InfoAppPass::insertIntFlowFunction(Module &M,
 	fargs.push_back(ptr_arrayidx_m);
 	/* Push number of elements */
 	fargs.push_back(ConstantInt::get(M.getContext(), APInt(32, idx)));       
-	if (isa<Function>(fc)) {
-		//Function *f = dyn_cast<Function>(fc);
-		ArrayRef<Value *> functionArguments(fargs);
-		iocCheck = CallInst::Create(fc, functionArguments, "");
-		/* Insert Function */
-		if (ci->getParent())
-			ci->getParent()->getInstList().insert(ci, iocCheck);
-	} 
+		
+	ArrayRef<Value *> functionArguments(fargs);
+	iocCheck = CallInst::Create(fc, functionArguments, "");
+	/* Insert Function */
+	if (ci->getParent())
+		ci->getParent()->getInstList().insert(ci, iocCheck);
 }
 
 /* 
@@ -1223,16 +1221,15 @@ InfoAppPass::insertIOCChecks(Module &M)
 								BasicBlock& BP = *bb;
 								
 								dbg_msg("setting False in ", bb->getName());
-								BasicBlock::iterator pii = BP.begin();
 								Instruction *pinst = BP.getFirstNonPHI();
 								assert(pinst && "could not get inst. setFalse");
+								
 								insertIntFlowFunction(M,
 													  "setFalseIOC",
 													  pinst,
-													  pii,
+													  ii,
 													  glA,
 													  glA_pos);
-
 							}
 						}
 					}
