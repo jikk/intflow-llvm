@@ -52,11 +52,11 @@ static const struct CallTaintEntry wLstSourceSummaries[] = {
 static const struct CallTaintEntry sensSinkSummaries[] = {
 	// function  tainted values   tainted direct memory tainted root ptrs
 	{ "malloc",   	TAINTS_ARG_1,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
-//	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
-//	{ "realloc", 	TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-//	{ "mmap", 		TAINTS_ARG_2,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-//	{ "memcpy", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
-//	{ "memset", 	TAINTS_ARG_3,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "calloc",  TAINTS_ALL_ARGS,  	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "realloc", TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "mmap", 	 TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "memcpy",  TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
+	{ "memset",  TAINTS_ALL_ARGS,	TAINTS_NOTHING,    	TAINTS_NOTHING },
 	{ 0,          TAINTS_NOTHING,	TAINTS_NOTHING,		TAINTS_NOTHING }
 };
 
@@ -259,6 +259,19 @@ InfoAppPass::checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct)
 	return ret;
 }
 
+bool
+InfoAppPass::checkForwardTaintedAny(CallInst *ci, InfoflowSolution* soln)
+{
+	unsigned int i;
+	
+	for (i = 0; i < ci->getNumOperands() - 1; i++) {
+		if (checkForwardTainted(*(ci->getOperand(i)), soln )) {
+			return true;
+		}
+	}
+
+	return false;
+}
 
 
 /* ****************************************************************************
@@ -906,18 +919,16 @@ InfoAppPass::backSensitiveInst(Function &F,
 											 func->getName());
 					if (entry->Name) {
 						/* this is a sensitive function */
-						
-						/* TODO: need a way to handle different functions too
-						 * (apart from malloc)
-						 * FIXME: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
-						 */
+						std::string sinkKind = getKindCall(M, F, ci);
 
-						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
+						if (checkForwardTaintedAny(ci, fsoln)) {
 							/* backward slicing needed */
-							std::string sinkKind = getKindCall(M, F, ci);
-							infoflow->setUntainted(sinkKind,
-												   *(ci->getOperand(0)));
-							
+							unsigned int i;
+							for (i = 0; i < ci->getNumOperands() - 1; i++) {
+								infoflow->setUntainted(sinkKind,
+													   *(ci->getOperand(i)));
+							}
+
 							std::set<std::string> kinds;
 							kinds.insert(sinkKind);
 							
@@ -1087,33 +1098,27 @@ InfoAppPass::backSensitiveArithm(Module &M,
 											 func->getName());
 					if (entry->Name) {
 						/* this is a sensitive function */
+						std::string sinkKind = getKindCall(M, F, ci);
 						
-						/* TODO: need a way to handle different functions too
-						 * (apart from malloc)
-						 * FIXME: THE REST OF THE FUNCTION IS FOR MALLOC ONLY!
-						 */
+						/* Taint first argument for malloc */
+						if (checkForwardTaintedAny(ci, fsoln)) {
+							unsigned int i;
+							for (i = 0; i < ci->getNumOperands() - 1; i++) {
+								infoflow->setUntainted(sinkKind,
+													   *(ci->getOperand(i)));
+							}
 
-						if (checkForwardTainted(*(ci->getOperand(0)), fsoln )) {
-							/* backward slicing needed */
-							std::string sinkKind = getKindCall(M, F, ci);
-							infoflow->setUntainted(sinkKind,
-												   *(ci->getOperand(0)));
-							
 							std::set<std::string> kinds;
 							kinds.insert(sinkKind);
-							
+
 							InfoflowSolution *soln =
 								infoflow->greatestSolution(kinds, false);
-							
-							/*
-							 * FIXME: need to check: do all llvm{sadd, etc}
-							 * have the same two arguments in the same spots?
-							 */
+
 							if (checkBackwardTainted(*(srcCI->getOperand(0)),
 													 soln) ||
 								checkBackwardTainted(*(srcCI->getOperand(1)),
-													   soln)) {
-								
+													 soln)) {
+
 								//add sens sink to this ioc
 								sensPoints[iocKind].push_back(sinkKind);
 								dbg_err("*************************");
@@ -1121,8 +1126,8 @@ InfoAppPass::backSensitiveArithm(Module &M,
 								dbg_msg("adding ioc: ", iocKind);
 								//and add ioc the sens sink list
 								iocPoints[sinkKind].push_back(iocKind);
-									/* this one needs to be handled */
-									/* TODO: How to handle these cases? */
+								/* this one needs to be handled */
+								/* TODO: How to handle these cases? */
 
 								dbg_msg("found sensitive: ", sinkKind);
 							}
@@ -1178,7 +1183,7 @@ InfoAppPass::insertIOCChecks(Module &M)
 
 						sensPointVector spv = sensPoints[iocKind];
 
-						// Insert one check for each malloc
+						// Insert one check for each sensitive sink
 						for(sensPointVector::const_iterator svi =
 							spv.begin();
 							svi != spv.end();

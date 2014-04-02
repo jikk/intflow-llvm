@@ -159,6 +159,8 @@ class InfoAppPass : public ModulePass {
     bool checkForwardTainted(Value &V,
 							 InfoflowSolution* soln,
 							 bool direct=true);
+    bool checkForwardTaintedAny(CallInst *ci, InfoflowSolution* soln);
+
     bool isConstAssign(const std::set<const Value *> vMap);
     
 	void removeChecksForFunction(Function& F, Module& M);
