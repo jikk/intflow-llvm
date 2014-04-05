@@ -77,6 +77,8 @@ static const struct CallTaintEntry bLstSourceSummaries[] = {
 	{ "fgets",   TAINTS_RETURN_VAL,  TAINTS_ARG_1,      TAINTS_NOTHING },
 	{ "getchar", TAINTS_RETURN_VAL,  TAINTS_NOTHING,    TAINTS_NOTHING },
 	{ "_IO_getc",TAINTS_RETURN_VAL,  TAINTS_NOTHING,    TAINTS_NOTHING },
+	{ "fread",   TAINTS_RETURN_VAL,	 TAINTS_ARG_1_4,    TAINTS_NOTHING },
+	{ "getenv",  TAINTS_RETURN_VAL,  TAINTS_RETURN_VAL, TAINTS_NOTHING },
 	{ 0,         TAINTS_NOTHING,     TAINTS_NOTHING,    TAINTS_NOTHING }
 };
 
@@ -135,6 +137,7 @@ InfoAppPass::doInitializationAndRun(Module &M)
 
 void
 InfoAppPass::doFinalization() {
+
 	DEBUG(errs() << "[InfoApp] doFinalizationWhitelisting\n");
 	DenseMap<const Value*, bool>::const_iterator xi = xformMap.begin();
 	DenseMap<const Value*, bool>::const_iterator xe = xformMap.end();
@@ -274,11 +277,9 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 					func = ci->getCalledFunction();
 					if (!func)
 						continue;
-
-
 					const CallTaintEntry *entry =
 						findEntryForFunction(bLstSourceSummaries,
-														func->getName());
+								func->getName());
 
 					if (entry->Name) {
 #ifdef __DBG__
@@ -291,7 +292,7 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 						
 						backwardSlicingBlacklisting(M, fsoln, ci);
 
-					}  else if ((func->getName() == "div")   ||
+					} else if ((func->getName() == "div")   ||
 							(func->getName() == "ldiv")  ||
 							(func->getName() == "lldiv") ||
 							(func->getName() == "iconv")
@@ -306,7 +307,6 @@ InfoAppPass::runOnModuleBlacklisting(Module &M)
 
 						ci->setCalledFunction(ioc_wrapper);
 					}
-
 				}
 			}
 		}
@@ -339,6 +339,8 @@ InfoAppPass::removeBenignChecks(Module &M)
 			for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
 				if (CallInst* ci = dyn_cast<CallInst>(ii)) {
 					Function *func = ci->getCalledFunction();
+					if (!func)
+						continue;
 					if ((func->getName() == "__ioc_report_add_overflow" ||
 								func->getName() == "__ioc_report_sub_overflow" ||
 								func->getName() == "__ioc_report_mul_overflow" ||
@@ -382,9 +384,10 @@ InfoAppPass::backwardSlicingBlacklisting(Module &M,
 					if (xformMap[ci])
 						continue;
 					func = ci->getCalledFunction();
+					if (!func)
+						continue;
 					if (func->getName() == "__ioc_report_conversion") {
 						xformMap[ci] = false;
-						
 						if (checkForwardTainted(*(ci->getOperand(7)), fsoln)) {
 							//check for arg. count
 							assert(ci->getNumOperands() == 10);
