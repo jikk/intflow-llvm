@@ -72,7 +72,7 @@ div_t   __ioc_div(int numerator, int denominator) {
     sprintf(log, "div: lval %d, rval %d", numerator, denominator);
 
     outputXML((char*) msg, (char*) "", 0, 0, log);
-    exit(-1);
+   // exit(-1);
   }
 #else
 
@@ -88,7 +88,7 @@ ldiv_t  __ioc_ldiv(int numerator, int denominator) {
     sprintf(log, "ldiv: lval %d, rval %d", numerator, denominator);
 
     outputXML((char*) msg, (char*) "", 0, 0, log);
-    exit(-1);
+   // exit(-1);
   }
 #else
 
@@ -104,7 +104,7 @@ lldiv_t __ioc_lldiv(int numerator, int denominator) {
     sprintf(log, "lldiv: lval %d, rval %d", numerator, denominator);
 
     outputXML((char*) msg, (char*) "", 0, 0, log);
-    exit(-1);
+ //   exit(-1);
   }
 #else
 
@@ -156,7 +156,7 @@ int outputXML(char* log,
   fprintf(fp, XML_MSG, entry_id, tc, impact, tc, log,
           fname, line, col, valStr);
   fclose(fp);
-  exit(-1);
+//  exit(-1);
   return 1;
 }
 

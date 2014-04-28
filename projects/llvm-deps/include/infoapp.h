@@ -12,7 +12,14 @@
 
 #include <set>
 
-#define WHITE_LIST "/opt/stonesoup/etc/whitelist.files"
+#define WHITE_LIST	"/opt/stonesoup/etc/whitelist.files"
+#define MODE_FILE	"/opt/stonesoup/etc/mode"
+#define WHITELISTING	1
+#define BLACKLISTING	2
+#define WHITE_SENSITIVE	3
+#define	BLACK_SENSITIVE	4
+#define MODE_MAX_NUM	4
+
 
 using namespace llvm;
 using namespace deps;
@@ -35,10 +42,14 @@ class InfoAppPass : public ModulePass {
     DenseMap<const Value*, bool> xformMap;
     std::set<StringRef> whiteSet;
     std::set<StringRef> blackSet;
+    unsigned char mode;
 
-    virtual void doInitialization();
+    virtual void doInitializationAndRun(Module &M);
     virtual void doFinalization();
-  
+
+    void runOnModuleWhitelisting(Module &M);
+    void runOnModuleBlacklisting(Module &M);
+
     /// Traverse instructions from the module(M) and identify tainted
     /// instructions.
     /// if it returns true: tag it to replace it with dummy
@@ -48,6 +59,16 @@ class InfoAppPass : public ModulePass {
                    InfoflowSolution* soln,
                    CallInst* sinkCI,
                    std::string& kinds);
+    void backwardSlicingBlacklisting(Module &M,
+   					InfoflowSolution* fsoln,
+					CallInst* srcCI);
+
+	InfoflowSolution *forwardSlicingBlacklisting(CallInst *ci,
+							const CallTaintEntry *entry,
+							uint64_t id);
+
+
+    void removeBenignChecks(Module &M);
 
     bool checkBackwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
     bool checkForwardTainted(Value &V, InfoflowSolution* soln, bool direct=true);
@@ -57,6 +78,8 @@ class InfoAppPass : public ModulePass {
     uint64_t getIntFromVal(Value* val);
     uint64_t getColFromVal(Value* val);
     void getStringFromVal(Value* val, std::string& output);
+    void getMode();
+
 };  //class
   
 typedef  struct {
@@ -67,7 +90,6 @@ typedef  struct {
   bool shift;
 } rmChecks;
 
-  
 }  // nameapce
 
 #endif
