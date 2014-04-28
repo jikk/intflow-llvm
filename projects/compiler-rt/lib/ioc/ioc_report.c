@@ -18,7 +18,9 @@
 #include <stdlib.h>
 #include <limits.h>
 
+#if 0
 #define __OUTPUT_XML__
+#endif
 
 #ifdef __OUTPUT_XML__
 int outputXML(char* log,
@@ -137,7 +139,7 @@ void __ioc_report_conversion(uint32_t line, uint32_t column,
   
   outputXML(log, (char*) filename, line, column, srcstr);
 #else
-  fprintf(stderr, "%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
+  fprintf(stderr, "\n%s:%d:%d: runtime error occured: value lost in conversion of '%s'"
                   " from '%s' (%s) to '%s' (%s)\n",
                   filename, line, column, srcstr,
                   srcty, canonsrcty, dstty, canondstty);
