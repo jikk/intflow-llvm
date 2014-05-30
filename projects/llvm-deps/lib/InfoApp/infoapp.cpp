@@ -19,6 +19,7 @@
 #define DBG_LINE 322
 #define DBG_COL 23
 
+
 using std::set;
 
 using namespace llvm;
@@ -340,6 +341,9 @@ InfoAppPass::trackSoln(Module &M,
       BasicBlock& B = *bi;
       for (BasicBlock::iterator ii = B.begin(); ii !=B.end(); ii++) {
         //instruction is tainted
+		//DEBUG(errs() << "[InfoApp]IR:");
+        //DEBUG(ii->dump());
+
         if (checkBackwardTainted(*ii, soln)) {
           DEBUG(errs() << "[InfoApp]checkBackwardTainted:");
           DEBUG(ii->dump());
@@ -580,16 +584,32 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator vi = vMap.begin();
   std::set<const Value *>::const_iterator ve = vMap.end();
 
+  DEBUG(errs() << "[InfoApp]Size:" << vMap.size() << "\n");
   for (;vi!=ve; vi++) {
     const Value* val = (const Value*) *vi;
+	DEBUG(errs() << "[InfoApp]Value:" );
+	DEBUG(val->dump());
+  }   
+
+  vi = vMap.begin();
+  ve = vMap.end();
+
+  DEBUG(errs() << "[InfoApp] == isConstAssign analysis begin ==\n" );
+
+  for (;vi!=ve; vi++) {
+    const Value* val = (const Value*) *vi;
+
     if (const CallInst* ci = dyn_cast<const CallInst>(val)) {
       Function* func = ci->getCalledFunction();
       //assert(func && "func should be fine!");
-      if (func && func->getName().startswith("llvm.ssub.with.overflow")) {
+      if (func && (func->getName().startswith("llvm.sadd.with.overflow")
+				|| func->getName().startswith("llvm.ssub.with.overflow")
+				|| func->getName().startswith("llvm.smul.with.overflow")
+		 			)) {
         continue;
       } else {
         //XXX: need more for other function calls
-        DEBUG(errs() << "[InfoApp]isConstAssign:" << func->getName() <<"\n");
+        DEBUG(errs() << "[InfoApp]isConstAssign:for-loop-out0:" << func->getName() <<"\n");
         return false;
       }
     } else if (dyn_cast<const LoadInst>(val)) {

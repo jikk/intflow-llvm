@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define __OUTPUT_XML__
+//#define __OUTPUT_XML__
 
 #ifdef __OUTPUT_XML__
 int outputXML(char* log,
@@ -172,7 +172,6 @@ void __ioc_report_error(uint32_t line, uint32_t column,
   sprintf(log,"[ expr = '%s', lval = %s, rval = %s ]", exprstr, lstr, rstr);
   outputXML((char*) msg, (char*) filename, line, column, log);
 #else
- 
   fprintf(stderr, "%s:%d:%d: runtime error occured: %s "
                   "[ expr = '%s', lval = %s, rval = %s ]\n",
                   filename, line, column, msg,
