@@ -584,6 +584,7 @@ InfoAppPass::isConstAssign(const std::set<const Value *> vMap) {
   std::set<const Value *>::const_iterator vi = vMap.begin();
   std::set<const Value *>::const_iterator ve = vMap.end();
 
+
   DEBUG(errs() << "[InfoApp]Size:" << vMap.size() << "\n");
   for (;vi!=ve; vi++) {
     const Value* val = (const Value*) *vi;
