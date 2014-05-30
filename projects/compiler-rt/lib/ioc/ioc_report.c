@@ -18,7 +18,7 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define __OUTPUT_XML__
+//#define __OUTPUT_XML__
 
 #if 0
 #ifdef __OUTPUT_XML__
