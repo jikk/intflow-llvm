@@ -576,7 +576,7 @@ InfoAppPass::createGlobalArray(Module &M, uint64_t size, std::string sinkKind)
 	Constant* zero = ConstantInt::get(IntegerType::get(M.getContext(), 32), 0);
 
 	for (uint64_t i = 0; i < size; i++) {
-		Initializer[i++] = zero; 
+		Initializer[i] = zero; 
 	}
 
 	ArrayType *ATy = ArrayType::get(IntegerType::get(M.getContext(), 32), size);
